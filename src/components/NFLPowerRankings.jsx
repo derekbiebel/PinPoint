@@ -481,6 +481,14 @@ function FuturesView() {
     );
   }
 
+  // Normalize API fields
+  const normalized = futures.map((t) => ({
+    ...t,
+    abbrev: t.abbrev || t.team,
+    name: t.name || TEAM_NAMES[t.team] || t.team,
+    gap: t.gap ?? (t.projected_wins != null && t.fd_win_total != null ? t.projected_wins - t.fd_win_total : 0),
+  }));
+
   const handleSort = (key) => {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -490,7 +498,7 @@ function FuturesView() {
     }
   };
 
-  const sorted = [...futures].sort((a, b) => {
+  const sorted = [...normalized].sort((a, b) => {
     const aVal = a[sortKey] ?? 0;
     const bVal = b[sortKey] ?? 0;
     return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
