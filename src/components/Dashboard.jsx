@@ -6,6 +6,7 @@ import LastRefreshed from './LastRefreshed';
 import GameCard from './GameCard';
 import BetTracker from './BetTracker';
 import Settings from './Settings';
+import ModelInsights from './ModelInsights';
 
 function MetricCard({ label, value, sub }) {
   return (
@@ -186,6 +187,9 @@ export default function Dashboard() {
             Only {refreshesLeft} refreshes left this month. Use them wisely.
           </div>
         )}
+
+        {/* Model Health */}
+        <ModelInsights bets={bets} />
 
         {/* Phantom Bankroll */}
         <BetTracker bets={bets} />
