@@ -11,7 +11,8 @@ const SPORTS = [
 const BOOKMAKERS = 'fanduel,draftkings,betmgm,caesars,pointsbet';
 const MONTHLY_BUDGET = 500;
 const COST_PER_SPORT = 3; // 3 markets × 1 region
-const COST_PER_REFRESH = SPORTS.length * COST_PER_SPORT; // 12
+const COST_PER_SCORES = SPORTS.length * 1; // 1 request per sport for scores
+const COST_PER_REFRESH = SPORTS.length * COST_PER_SPORT + COST_PER_SCORES; // 16 (odds + scores)
 const SAFETY_BUFFER = 15; // stop before absolute zero so you're never locked out
 
 export function getRemainingRequests(responseHeaders) {
@@ -83,6 +84,39 @@ export async function fetchAllOdds(knownRemaining) {
   }
 
   return { games: allGames, remaining: lastRemaining };
+}
+
+export async function fetchScoresForSport(sportKey, daysFrom = 3) {
+  const url = `${BASE}/sports/${sportKey}/scores?apiKey=${KEY}&daysFrom=${daysFrom}`;
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Scores API error (${res.status}): ${text}`);
+  }
+
+  const remaining = getRemainingRequests(res.headers);
+  console.log(`[Odds API] Scores ${sportKey} — requests remaining: ${remaining}`);
+
+  const data = await res.json();
+  return { data, remaining };
+}
+
+export async function fetchAllScores() {
+  let lastRemaining = null;
+  const allScores = [];
+
+  for (const sport of SPORTS) {
+    try {
+      const { data, remaining } = await fetchScoresForSport(sport);
+      allScores.push(...data);
+      lastRemaining = remaining;
+    } catch (err) {
+      console.warn(`[Odds API] Failed to fetch scores for ${sport}:`, err.message);
+    }
+  }
+
+  return { scores: allScores, remaining: lastRemaining };
 }
 
 export async function fetchHistoricalOdds(sportKey, isoDate) {

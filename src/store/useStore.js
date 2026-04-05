@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { fetchAllOdds, checkBudget, canAffordRefresh, getRefreshesLeft, COST_PER_REFRESH, MONTHLY_BUDGET } from '../lib/oddsApi';
+import { fetchAllOdds, fetchAllScores, checkBudget, canAffordRefresh, COST_PER_REFRESH } from '../lib/oddsApi';
 import { processGames } from '../lib/valueModel';
+import { placeBets, resolveBets, getBets } from '../lib/betTracker';
 
 const useStore = create((set, get) => ({
   games: [],
@@ -11,10 +12,10 @@ const useStore = create((set, get) => ({
   error: null,
   requestsRemaining: null,
   requestsUsed: null,
+  bets: getBets(),
 
   setSelectedSport: (key) => set({ selectedSport: key }),
 
-  // Cheap call to /sports just to read the x-requests-remaining header
   checkBudget: async () => {
     try {
       const { remaining, used } = await checkBudget();
@@ -27,7 +28,6 @@ const useStore = create((set, get) => ({
   fetchGames: async () => {
     const { requestsRemaining } = get();
 
-    // If we know remaining and can't afford it, block immediately
     if (requestsRemaining !== null && !canAffordRefresh(requestsRemaining)) {
       set({
         error: `Only ${requestsRemaining} API requests left — not enough for a refresh (costs ~${COST_PER_REFRESH}). Resets next month.`,
@@ -37,7 +37,8 @@ const useStore = create((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      const { games: rawGames, remaining } = await fetchAllOdds(requestsRemaining);
+      // Fetch odds
+      const { games: rawGames, remaining: oddsRemaining } = await fetchAllOdds(requestsRemaining);
       const processed = processGames(rawGames);
 
       const rawOdds = {};
@@ -46,11 +47,26 @@ const useStore = create((set, get) => ({
         rawOdds[game.sport_key].push(game);
       }
 
+      // Place phantom bets on value edges
+      const { bets: updatedBets } = placeBets(processed);
+
+      // Fetch scores and resolve pending bets
+      let lastRemaining = oddsRemaining;
+      try {
+        const { scores, remaining: scoresRemaining } = await fetchAllScores();
+        const { bets: resolvedBets } = resolveBets(scores);
+        lastRemaining = scoresRemaining;
+        set({ bets: resolvedBets });
+      } catch (err) {
+        console.warn('[Scores fetch failed]', err.message);
+        set({ bets: updatedBets });
+      }
+
       set({
         games: processed,
         rawOdds,
         lastFetched: new Date().toISOString(),
-        requestsRemaining: remaining,
+        requestsRemaining: lastRemaining,
         isLoading: false,
       });
     } catch (err) {

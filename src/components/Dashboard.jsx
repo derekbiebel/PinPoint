@@ -4,6 +4,7 @@ import { canAffordRefresh, getRefreshesLeft, COST_PER_REFRESH, MONTHLY_BUDGET } 
 import SportFilter from './SportFilter';
 import LastRefreshed from './LastRefreshed';
 import GameCard from './GameCard';
+import BetTracker from './BetTracker';
 
 function MetricCard({ label, value, sub }) {
   return (
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const isLoading = useStore((s) => s.isLoading);
   const error = useStore((s) => s.error);
   const requestsRemaining = useStore((s) => s.requestsRemaining);
+  const bets = useStore((s) => s.bets);
   const fetchGames = useStore((s) => s.fetchGames);
   const checkBudgetFn = useStore((s) => s.checkBudget);
 
@@ -134,6 +136,9 @@ export default function Dashboard() {
             Only {refreshesLeft} refreshes left this month. Use them wisely.
           </div>
         )}
+
+        {/* Phantom Bankroll */}
+        <BetTracker bets={bets} />
 
         {/* Loading */}
         {isLoading && (
