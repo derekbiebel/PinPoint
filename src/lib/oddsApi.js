@@ -1,5 +1,18 @@
 const BASE = 'https://api.the-odds-api.com/v4';
-const KEY = import.meta.env.VITE_ODDS_API_KEY;
+const API_KEY_STORAGE = 'pinpoint_api_key';
+
+export function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE) || import.meta.env.VITE_ODDS_API_KEY || '';
+}
+
+export function setApiKey(key) {
+  localStorage.setItem(API_KEY_STORAGE, key.trim());
+}
+
+export function hasValidKey() {
+  const key = getApiKey();
+  return key && key !== 'your_key_here';
+}
 
 const SPORTS = [
   'americanfootball_nfl',
@@ -37,7 +50,7 @@ export function getRefreshesLeft(apiRemaining) {
 
 // Cheap check: fetch a single sport with no markets just to read the header
 export async function checkBudget() {
-  const url = `${BASE}/sports?apiKey=${KEY}`;
+  const url = `${BASE}/sports?apiKey=${getApiKey()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`API error (${res.status})`);
   const remaining = getRemainingRequests(res.headers);
@@ -47,7 +60,7 @@ export async function checkBudget() {
 }
 
 export async function fetchOddsForSport(sportKey) {
-  const url = `${BASE}/sports/${sportKey}/odds?apiKey=${KEY}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&bookmakers=${BOOKMAKERS}`;
+  const url = `${BASE}/sports/${sportKey}/odds?apiKey=${getApiKey()}&regions=us&markets=h2h,spreads,totals&oddsFormat=american&bookmakers=${BOOKMAKERS}`;
   const res = await fetch(url);
 
   if (!res.ok) {
@@ -87,7 +100,7 @@ export async function fetchAllOdds(knownRemaining) {
 }
 
 export async function fetchScoresForSport(sportKey, daysFrom = 3) {
-  const url = `${BASE}/sports/${sportKey}/scores?apiKey=${KEY}&daysFrom=${daysFrom}`;
+  const url = `${BASE}/sports/${sportKey}/scores?apiKey=${getApiKey()}&daysFrom=${daysFrom}`;
   const res = await fetch(url);
 
   if (!res.ok) {
@@ -120,7 +133,7 @@ export async function fetchAllScores() {
 }
 
 export async function fetchHistoricalOdds(sportKey, isoDate) {
-  const url = `${BASE}/sports/${sportKey}/odds-history?apiKey=${KEY}&regions=us&markets=h2h&oddsFormat=american&date=${isoDate}`;
+  const url = `${BASE}/sports/${sportKey}/odds-history?apiKey=${getApiKey()}&regions=us&markets=h2h&oddsFormat=american&date=${isoDate}`;
   const res = await fetch(url);
 
   if (!res.ok) {

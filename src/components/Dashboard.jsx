@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import useStore from '../store/useStore';
-import { canAffordRefresh, getRefreshesLeft, COST_PER_REFRESH, MONTHLY_BUDGET } from '../lib/oddsApi';
+import { canAffordRefresh, getRefreshesLeft, COST_PER_REFRESH, MONTHLY_BUDGET, hasValidKey, setApiKey } from '../lib/oddsApi';
 import SportFilter from './SportFilter';
 import LastRefreshed from './LastRefreshed';
 import GameCard from './GameCard';
@@ -18,6 +18,58 @@ function MetricCard({ label, value, sub }) {
   );
 }
 
+function ApiKeyScreen({ onSave }) {
+  const [key, setKey] = useState('');
+  const [error, setError] = useState(null);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const trimmed = key.trim();
+    if (!trimmed || trimmed === 'your_key_here') {
+      setError('Please enter a valid API key.');
+      return;
+    }
+    onSave(trimmed);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 max-w-md w-full shadow-sm">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+          Value Finder
+        </h2>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 text-center">
+          Enter your Odds API key to get started.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => { setKey(e.target.value); setError(null); }}
+              placeholder="Paste your API key here"
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-gray-400"
+              autoFocus
+            />
+            {error && (
+              <p className="text-red-500 text-xs mt-1.5">{error}</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            className="w-full py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors"
+          >
+            Connect
+          </button>
+        </form>
+        <p className="text-gray-400 dark:text-gray-500 text-xs mt-4 text-center">
+          Free key at the-odds-api.com (500 requests/month)
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const games = useStore((s) => s.games);
   const selectedSport = useStore((s) => s.selectedSport);
@@ -31,8 +83,7 @@ export default function Dashboard() {
   const affordable = canAffordRefresh(requestsRemaining);
   const refreshesLeft = getRefreshesLeft(requestsRemaining);
 
-  const apiKey = import.meta.env.VITE_ODDS_API_KEY;
-  const hasKey = apiKey && apiKey !== 'your_key_here';
+  const [hasKey, setHasKey] = useState(hasValidKey());
 
   useEffect(() => {
     if (!hasKey) return;
@@ -64,22 +115,7 @@ export default function Dashboard() {
   const sharpMoves = 0; // TODO: wire with historical comparison
 
   if (!hasKey) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 max-w-md text-center shadow-sm">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">API Key Required</h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-            Add your Odds API key to <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-xs">.env</code>:
-          </p>
-          <pre className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 text-left text-sm text-gray-700 dark:text-gray-300">
-            VITE_ODDS_API_KEY=your_key
-          </pre>
-          <p className="text-gray-500 dark:text-gray-400 text-xs mt-3">
-            Get a free key at the-odds-api.com
-          </p>
-        </div>
-      </div>
-    );
+    return <ApiKeyScreen onSave={(key) => { setApiKey(key); setHasKey(true); }} />;
   }
 
   return (
