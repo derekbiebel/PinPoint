@@ -7,6 +7,7 @@ import GameCard from './GameCard';
 import BetTracker from './BetTracker';
 import Settings from './Settings';
 import ModelInsights from './ModelInsights';
+import TrendingTeams from './TrendingTeams';
 
 function MetricCard({ label, value, sub }) {
   return (
@@ -87,6 +88,8 @@ export default function Dashboard() {
 
   const [hasKey, setHasKey] = useState(hasValidKey());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('games');
+  const teamStats = useStore((s) => s.teamStats);
 
   useEffect(() => {
     if (!hasKey) return;
@@ -144,6 +147,29 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Tabs */}
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+          {[
+            { key: 'games', label: 'Games' },
+            { key: 'trending', label: 'Trending' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'trending' && <TrendingTeams teamStats={teamStats} />}
+
+        {activeTab === 'games' && <>
         {/* Sport filter */}
         <SportFilter />
 
@@ -245,6 +271,7 @@ export default function Dashboard() {
             )}
           </div>
         )}
+        </>}
       </main>
 
       <Settings
