@@ -4,10 +4,33 @@ import { processGames } from '../lib/valueModel';
 import { placeBets, resolveBets, getBets } from '../lib/betTracker';
 import { fetchAllTeamStats } from '../lib/teamStats';
 
+// Persist raw odds to localStorage so they survive page refreshes
+const ODDS_CACHE_KEY = 'pinpoint_odds_cache';
+
+function loadCachedOdds() {
+  try {
+    const cached = localStorage.getItem(ODDS_CACHE_KEY);
+    if (!cached) return null;
+    return JSON.parse(cached);
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedOdds(rawOdds, lastFetched) {
+  try {
+    localStorage.setItem(ODDS_CACHE_KEY, JSON.stringify({ rawOdds, lastFetched }));
+  } catch {
+    // localStorage full or unavailable — not critical
+  }
+}
+
+const cached = loadCachedOdds();
+
 const useStore = create((set, get) => ({
   games: [],
-  rawOdds: {},
-  lastFetched: null,
+  rawOdds: cached?.rawOdds || {},
+  lastFetched: cached?.lastFetched || null,
   selectedSport: 'all',
   isLoading: false,
   isLoadingTeams: false,
@@ -16,6 +39,7 @@ const useStore = create((set, get) => ({
   requestsUsed: null,
   bets: getBets(),
   teamStats: {},
+  _needsReprocess: !!cached, // flag to reprocess cached odds once team stats load
 
   setSelectedSport: (key) => set({ selectedSport: key }),
 
@@ -26,12 +50,12 @@ const useStore = create((set, get) => ({
       const teamStats = await fetchAllTeamStats();
       set({ teamStats, isLoadingTeams: false });
 
-      // If we already have games loaded, reprocess them with fresh team data
+      // Reprocess cached or current raw odds with fresh team data
       const { rawOdds } = get();
       const allRaw = Object.values(rawOdds).flat();
       if (allRaw.length > 0) {
         const processed = processGames(allRaw, teamStats);
-        set({ games: processed });
+        set({ games: processed, _needsReprocess: false });
       }
     } catch (err) {
       console.warn('[Team stats failed]', err.message);
@@ -95,11 +119,16 @@ const useStore = create((set, get) => ({
         set({ bets: updatedBets });
       }
 
+      const lastFetched = new Date().toISOString();
+
+      // Save to localStorage so it survives page refreshes
+      saveCachedOdds(rawOdds, lastFetched);
+
       set({
         games: processed,
         rawOdds,
         teamStats: finalTeamStats,
-        lastFetched: new Date().toISOString(),
+        lastFetched,
         requestsRemaining: lastRemaining,
         isLoading: false,
       });
