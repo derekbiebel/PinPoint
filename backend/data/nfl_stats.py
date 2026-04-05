@@ -212,6 +212,77 @@ def compute_team_epa(pbp: pd.DataFrame, current_week: int | None = None) -> list
     return results
 
 
+def compute_team_epa_from_seasonal(seasonal: pd.DataFrame) -> list[dict]:
+    """
+    Compute team-level EPA from seasonal aggregate stats.
+    Much lighter than PBP — works on Render's free tier.
+
+    Aggregates player passing_epa + rushing_epa by team for offense,
+    and uses league-average as a baseline for relative ratings.
+    """
+    if seasonal is None or seasonal.empty:
+        logger.warning("No seasonal data to compute EPA from")
+        return []
+
+    season = int(seasonal["season"].max())
+
+    # Offensive EPA: sum of passing_epa + rushing_epa per team
+    offense_cols = []
+    for col in ["passing_epa", "rushing_epa", "receiving_epa"]:
+        if col in seasonal.columns:
+            offense_cols.append(col)
+
+    if not offense_cols:
+        logger.warning("No EPA columns in seasonal data")
+        return []
+
+    df = seasonal.copy()
+    df["total_epa"] = df[offense_cols].sum(axis=1)
+
+    # Group by team
+    team_off = df.groupby("recent_team").agg(
+        total_epa=("total_epa", "sum"),
+        attempts=("attempts", "sum") if "attempts" in df.columns else ("total_epa", "count"),
+    ).reset_index()
+
+    # Compute EPA per play proxy (total EPA / attempts)
+    if "attempts" in df.columns:
+        team_att = df.groupby("recent_team")["attempts"].sum().reset_index()
+        team_att.columns = ["recent_team", "total_attempts"]
+        team_off = team_off.merge(team_att, on="recent_team", how="left")
+        team_off["off_epa"] = team_off["total_epa"] / team_off["total_attempts"].clip(lower=1)
+    else:
+        # Fallback: just use total EPA, normalize across league
+        mean_epa = team_off["total_epa"].mean()
+        std_epa = team_off["total_epa"].std().clip(lower=0.01)
+        team_off["off_epa"] = (team_off["total_epa"] - mean_epa) / std_epa * 0.05
+
+    # We don't have defensive EPA directly from seasonal player stats,
+    # so estimate it as the inverse: teams that allow more EPA to opponents
+    # Since we can't compute this without PBP, use offensive EPA spread
+    # as a proxy and set defensive EPA as league-average-relative
+    league_mean_off = team_off["off_epa"].mean()
+
+    results = []
+    for _, row in team_off.iterrows():
+        team = row["recent_team"]
+        off_epa = round(float(row["off_epa"]), 4)
+        # Defense approximation: assume league average for now
+        # (without PBP we can't compute real defensive EPA per play)
+        def_epa = round(league_mean_off, 4)
+
+        results.append({
+            "team": team,
+            "season": season,
+            "week": 0,
+            "off_epa": off_epa,
+            "def_epa": def_epa,
+        })
+
+    logger.info(f"Computed EPA from seasonal stats for {len(results)} teams, season {season}")
+    return results
+
+
 def get_success_rate(pbp: pd.DataFrame, team: str, side: str = "offense") -> float:
     """
     Calculate success rate for a team.

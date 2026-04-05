@@ -83,25 +83,21 @@ async def run(include_odds: bool = False) -> dict:
 
     current_week = nfl_state.get("week", 1) if nfl_state else 1
 
-    # ---- Step 2: Fetch play-by-play data ----
-    # In offseason, use last completed season's data since current season has none
-    pbp = None
+    # ---- Step 2: Fetch seasonal stats (lightweight, works on free hosting) ----
+    pbp = None  # PBP is too large for free-tier hosting, use seasonal instead
     team_epa = []
-    pbp_seasons = [season]
-    if offseason:
-        pbp_seasons = [season - 1]
-        logger.info(f"Offseason — using {season - 1} PBP data for ratings")
+    data_seasons = [season] if not offseason else [season - 1]
+    logger.info(f"Fetching seasonal stats for {data_seasons}")
 
+    seasonal = None
     try:
-        pbp = nfl_stats.fetch_pbp(pbp_seasons)
-        if pbp is not None and not pbp.empty:
-            sources_fetched.append("nfl_pbp")
-            # In offseason, use a high week number so all games are included
-            epa_week = current_week if not offseason else 22
-            team_epa = nfl_stats.compute_team_epa(pbp, epa_week)
+        seasonal = nfl_stats.fetch_seasonal_stats(data_seasons)
+        if seasonal is not None and not seasonal.empty:
+            sources_fetched.append("seasonal_stats")
+            team_epa = nfl_stats.compute_team_epa_from_seasonal(seasonal)
     except Exception as e:
-        errors.append(f"nfl_pbp: {e}")
-        logger.error(f"PBP fetch failed: {e}")
+        errors.append(f"seasonal_stats: {e}")
+        logger.error(f"Seasonal stats fetch failed: {e}")
 
     # ---- Step 3: Fetch injuries ----
     injuries = []
@@ -126,12 +122,10 @@ async def run(include_odds: bool = False) -> dict:
         errors.append(f"espn_rosters: {e}")
         logger.error(f"ESPN rosters fetch failed: {e}")
 
-    # ---- Step 4b: Fetch seasonal stats and compute player rankings ----
+    # ---- Step 4b: Compute player rankings from seasonal stats (already fetched in step 2) ----
     player_ranks = {}
     try:
-        seasonal = nfl_stats.fetch_seasonal_stats(pbp_seasons)
         if seasonal is not None and not seasonal.empty:
-            sources_fetched.append("seasonal_stats")
             player_ranks = player_rankings.compute_player_rankings(seasonal)
             if player_ranks:
                 global _player_rankings_cache
