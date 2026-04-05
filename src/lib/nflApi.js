@@ -3,25 +3,29 @@ const NFL_API = import.meta.env.VITE_NFL_API_URL || 'http://localhost:8000/api';
 export async function fetchTeamRatings() {
   const res = await fetch(`${NFL_API}/teams`);
   if (!res.ok) throw new Error('Failed to fetch team ratings');
-  return res.json();
+  const data = await res.json();
+  return data.teams || [];
 }
 
 export async function fetchGames() {
   const res = await fetch(`${NFL_API}/games`);
   if (!res.ok) throw new Error('Failed to fetch games');
-  return res.json();
+  const data = await res.json();
+  return data.games || [];
 }
 
 export async function fetchFutures() {
   const res = await fetch(`${NFL_API}/futures`);
   if (!res.ok) throw new Error('Failed to fetch futures');
-  return res.json();
+  const data = await res.json();
+  return data.futures || [];
 }
 
 export async function fetchMatchups() {
   const res = await fetch(`${NFL_API}/matchups`);
   if (!res.ok) throw new Error('Failed to fetch matchups');
-  return res.json();
+  const data = await res.json();
+  return data.matchups || [];
 }
 
 export async function fetchStatus() {
