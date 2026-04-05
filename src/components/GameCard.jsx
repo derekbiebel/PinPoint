@@ -65,7 +65,7 @@ export default function GameCard({ game }) {
           <div className="flex items-center gap-2 shrink-0 text-xs text-gray-500 dark:text-gray-400">
             <span>{gameTime}</span>
             <span className="text-gray-300 dark:text-gray-600">|</span>
-            <span>{game.bookmakers.length} books</span>
+            <span>FanDuel</span>
           </div>
         </div>
       </div>
@@ -82,7 +82,7 @@ export default function GameCard({ game }) {
               </div>
               <div className="space-y-0.5">
                 {edges.map((edge, i) => (
-                  <BetBlock key={i} edge={edge} movement={null} />
+                  <BetBlock key={i} edge={edge} />
                 ))}
               </div>
             </div>

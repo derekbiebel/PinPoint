@@ -1,9 +1,13 @@
 /**
- * Core value model — vig-free consensus probability calculations.
- * All pure functions, no side effects.
+ * Value model — team-performance-based edge detection.
+ *
+ * Instead of comparing books against each other, this model builds its
+ * own win probability from team stats (record, streak, home/away splits)
+ * and compares that against FanDuel's implied odds. Value = our model
+ * thinks the team wins more often than FanDuel's price suggests.
  */
 
-const MIN_BOOKS_FOR_CONSENSUS = 3;
+import { confidenceModifier } from './teamStats';
 
 export function impliedProb(americanOdds) {
   if (americanOdds > 0) return 100 / (americanOdds + 100);
@@ -18,23 +22,77 @@ export function vigFreeProbs(odds1, odds2) {
 }
 
 /**
- * Build consensus across books for a given market.
+ * Build a model probability for a team based on performance stats.
  *
- * For spreads/totals, different books may offer different points
- * (e.g. -3.5 vs -4). We key consensus by outcome name only (team or
- * Over/Under), not by point, because the vig-free probability already
- * accounts for the point difference. This lets us detect value when a
- * book's line disagrees with the market.
+ * Starts from a 50/50 base and adjusts based on:
+ *  - Overall win percentage (strongest signal)
+ *  - Home/away record for this specific venue context
+ *  - Current streak (momentum)
  *
- * Also tracks the most common point (consensus line) and how many
- * books contributed, so we can require a minimum book threshold.
+ * Returns a probability between 0.20 and 0.80 — we cap it because
+ * team stats alone can't predict with extreme confidence.
  */
-export function buildConsensus(bookmakers, marketKey) {
-  const outcomeTotals = {};
-  const outcomeCounts = {};
-  const outcomePoints = {}; // track point frequencies for consensus line
+export function modelProbability(teamName, isHome, opponentName, teamStats) {
+  const team = teamStats[teamName];
+  const opp = teamStats[opponentName];
 
-  for (const book of bookmakers) {
+  if (!team) return null;
+
+  let prob = 0.50;
+
+  // 1. Win percentage — strongest signal
+  // Shift based on how far above/below .500 this team is
+  if (team.winPct > 0) {
+    prob += (team.winPct - 0.500) * 0.40; // e.g. .600 team → +0.04
+  }
+
+  // 2. Opponent strength — adjust if opponent is strong/weak
+  if (opp && opp.winPct > 0) {
+    prob -= (opp.winPct - 0.500) * 0.30; // facing .600 team → -0.03
+  }
+
+  // 3. Home/away split
+  if (isHome && team.homeRecord) {
+    const parts = team.homeRecord.split('-').map(Number);
+    if (parts.length >= 2 && parts[0] + parts[1] >= 5) {
+      const homePct = parts[0] / (parts[0] + parts[1]);
+      prob += (homePct - 0.500) * 0.20;
+    }
+  } else if (!isHome && team.awayRecord) {
+    const parts = team.awayRecord.split('-').map(Number);
+    if (parts.length >= 2 && parts[0] + parts[1] >= 5) {
+      const awayPct = parts[0] / (parts[0] + parts[1]);
+      prob += (awayPct - 0.500) * 0.20;
+    }
+  }
+
+  // 4. Streak momentum
+  if (team.streak) {
+    const match = team.streak.match(/^(W|L)(\d+)$/i);
+    if (match) {
+      const type = match[1].toUpperCase();
+      const len = Math.min(parseInt(match[2]), 10); // cap influence at 10
+      const streakBoost = (len / 10) * 0.06; // max +/- 6%
+      prob += type === 'W' ? streakBoost : -streakBoost;
+    }
+  }
+
+  // Clamp to reasonable range
+  return Math.max(0.20, Math.min(0.80, prob));
+}
+
+/**
+ * Calculate edges for a game using our model probability vs FanDuel odds.
+ */
+export function calculateEdges(game, teamStats = {}) {
+  const markets = ['h2h', 'spreads', 'totals'];
+  const edgeResults = [];
+
+  // Use first bookmaker (FanDuel, since we only fetch that now)
+  const book = game.bookmakers[0];
+  if (!book) return edgeResults;
+
+  for (const marketKey of markets) {
     const market = book.markets.find((m) => m.key === marketKey);
     if (!market) continue;
 
@@ -42,101 +100,62 @@ export function buildConsensus(bookmakers, marketKey) {
     if (outcomes.length !== 2) continue;
 
     const { prob1, prob2 } = vigFreeProbs(outcomes[0].price, outcomes[1].price);
-    const probs = [prob1, prob2];
+    const bookProbs = [prob1, prob2];
 
     outcomes.forEach((outcome, i) => {
-      // Key by name only — NOT by point
-      const key = outcome.name;
-      outcomeTotals[key] = (outcomeTotals[key] || 0) + probs[i];
-      outcomeCounts[key] = (outcomeCounts[key] || 0) + 1;
+      const isTeamBet = outcome.name !== 'Over' && outcome.name !== 'Under';
+      const teamName = isTeamBet ? outcome.name : null;
+      const opponentName = isTeamBet
+        ? (outcome.name === game.home_team ? game.away_team : game.home_team)
+        : null;
+      const isHome = teamName === game.home_team;
 
-      // Track points for spreads/totals
-      if (outcome.point !== undefined) {
-        if (!outcomePoints[key]) outcomePoints[key] = {};
-        outcomePoints[key][outcome.point] = (outcomePoints[key][outcome.point] || 0) + 1;
-      }
-    });
-  }
+      // Get confidence factors for display
+      const { modifier, factors } = teamName
+        ? confidenceModifier(teamName, isHome, teamStats)
+        : { modifier: 1.0, factors: [] };
 
-  const consensus = {};
-  for (const key of Object.keys(outcomeTotals)) {
-    const count = outcomeCounts[key];
-    // Require minimum books for a reliable consensus
-    if (count < MIN_BOOKS_FOR_CONSENSUS) continue;
+      let edgePct = 0;
+      let modelProb = null;
 
-    const consensusPoint = outcomePoints[key]
-      ? parseFloat(
-          Object.entries(outcomePoints[key]).sort((a, b) => b[1] - a[1])[0][0]
-        )
-      : undefined;
-
-    consensus[key] = {
-      prob: outcomeTotals[key] / count,
-      count,
-      consensusPoint,
-    };
-  }
-  return consensus;
-}
-
-export function calculateEdges(game) {
-  const markets = ['h2h', 'spreads', 'totals'];
-  const edgeResults = [];
-
-  for (const marketKey of markets) {
-    const consensus = buildConsensus(game.bookmakers, marketKey);
-
-    for (const book of game.bookmakers) {
-      const market = book.markets.find((m) => m.key === marketKey);
-      if (!market) continue;
-
-      const outcomes = market.outcomes;
-      if (outcomes.length !== 2) continue;
-
-      const { prob1, prob2 } = vigFreeProbs(outcomes[0].price, outcomes[1].price);
-      const bookProbs = [prob1, prob2];
-
-      outcomes.forEach((outcome, i) => {
-        const key = outcome.name;
-        const con = consensus[key];
-        if (!con) return;
-
-        const edge = con.prob - bookProbs[i];
-        const edgePct = edge * 100;
-
-        // For spreads/totals, flag if this book offers a better number
-        let betterNumber = false;
-        if (outcome.point !== undefined && con.consensusPoint !== undefined) {
-          if (marketKey === 'spreads') {
-            // Lower spread = better for the bettor (e.g. -3.5 better than -4)
-            betterNumber = outcome.point > con.consensusPoint;
-          } else if (marketKey === 'totals') {
-            // For over: lower point = better. For under: higher point = better.
-            betterNumber =
-              outcome.name === 'Over'
-                ? outcome.point < con.consensusPoint
-                : outcome.point > con.consensusPoint;
-          }
+      if (marketKey === 'h2h' && teamName) {
+        // For moneyline: use our model probability directly
+        modelProb = modelProbability(teamName, isHome, opponentName, teamStats);
+        if (modelProb !== null) {
+          edgePct = (modelProb - bookProbs[i]) * 100;
         }
+      } else if (marketKey === 'spreads' && teamName) {
+        // For spreads: model probability adjusts confidence in the spread
+        modelProb = modelProbability(teamName, isHome, opponentName, teamStats);
+        if (modelProb !== null) {
+          // If our model thinks the team is stronger than the book implies,
+          // they're more likely to cover the spread too
+          edgePct = (modelProb - bookProbs[i]) * 100 * 0.7; // dampen for spreads
+        }
+      } else if (marketKey === 'totals') {
+        // For totals: we don't have scoring data to model, so skip edge calc
+        // but still show the line for reference
+        edgePct = 0;
+      }
 
-        edgeResults.push({
-          market: marketKey,
-          book: book.key,
-          bookTitle: book.title,
-          outcomeName: outcome.name,
-          point: outcome.point,
-          consensusPoint: con.consensusPoint,
-          price: outcome.price,
-          impliedProb: bookProbs[i],
-          consensusProb: con.prob,
-          consensusBooks: con.count,
-          edge,
-          edgePct,
-          edgeLevel: edgePct >= 5 ? 'high' : edgePct >= 3 ? 'moderate' : 'none',
-          betterNumber,
-        });
+      edgeResults.push({
+        market: marketKey,
+        book: book.key,
+        bookTitle: book.title,
+        outcomeName: outcome.name,
+        point: outcome.point,
+        price: outcome.price,
+        impliedProb: bookProbs[i],
+        modelProb,
+        confidenceModifier: modifier,
+        confidenceFactors: factors,
+        edge: edgePct / 100,
+        edgePct,
+        adjustedEdgePct: edgePct, // already model-based, no separate adjustment
+        edgeLevel: edgePct >= 5 ? 'high' : edgePct >= 3 ? 'moderate' : 'none',
+        betterNumber: false,
       });
-    }
+    });
   }
 
   return edgeResults;
@@ -148,49 +167,9 @@ export function getGameEdgeLevel(edges) {
   return 'none';
 }
 
-export function detectMovement(currentOdds, historicalOdds, marketKey) {
-  if (!historicalOdds) return null;
-
-  if (marketKey === 'h2h') {
-    const currentProb = impliedProb(currentOdds);
-    const historicalProb = impliedProb(historicalOdds);
-    const diff = currentProb - historicalProb;
-    if (Math.abs(diff) >= 0.10) {
-      return { direction: diff > 0 ? 'up' : 'down', magnitude: Math.abs(diff * 100) };
-    }
-  } else {
-    const diff = Math.abs(currentOdds - historicalOdds);
-    if (diff >= 1.5) {
-      return { direction: currentOdds > historicalOdds ? 'up' : 'down', magnitude: diff };
-    }
-  }
-  return null;
-}
-
-export function getBestOdds(bookmakers, marketKey, outcomeName, point) {
-  let best = null;
-  let bestBook = null;
-
-  for (const book of bookmakers) {
-    const market = book.markets.find((m) => m.key === marketKey);
-    if (!market) continue;
-    const outcome = market.outcomes.find((o) => {
-      if (o.name !== outcomeName) return false;
-      if (point !== undefined && o.point !== point) return false;
-      return true;
-    });
-    if (!outcome) continue;
-    if (best === null || outcome.price > best) {
-      best = outcome.price;
-      bestBook = book.title;
-    }
-  }
-  return { price: best, book: bestBook };
-}
-
-export function processGames(rawGames) {
+export function processGames(rawGames, teamStats = {}) {
   return rawGames.map((game) => {
-    const edges = calculateEdges(game);
+    const edges = calculateEdges(game, teamStats);
     const edgeLevel = getGameEdgeLevel(edges);
     return { ...game, edges, edgeLevel };
   });

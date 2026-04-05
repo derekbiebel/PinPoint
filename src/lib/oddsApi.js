@@ -21,7 +21,7 @@ const SPORTS = [
   'icehockey_nhl',
 ];
 
-const BOOKMAKERS = 'fanduel,draftkings,betmgm,caesars,pointsbet';
+const BOOKMAKERS = 'fanduel';
 const MONTHLY_BUDGET = 500;
 const COST_PER_SPORT = 3; // 3 markets × 1 region
 const COST_PER_SCORES = SPORTS.length * 1; // 1 request per sport for scores

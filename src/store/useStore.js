@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { fetchAllOdds, fetchAllScores, checkBudget, canAffordRefresh, COST_PER_REFRESH } from '../lib/oddsApi';
 import { processGames } from '../lib/valueModel';
 import { placeBets, resolveBets, getBets } from '../lib/betTracker';
+import { fetchAllTeamStats } from '../lib/teamStats';
 
 const useStore = create((set, get) => ({
   games: [],
@@ -13,6 +14,7 @@ const useStore = create((set, get) => ({
   requestsRemaining: null,
   requestsUsed: null,
   bets: getBets(),
+  teamStats: {},
 
   setSelectedSport: (key) => set({ selectedSport: key }),
 
@@ -37,9 +39,17 @@ const useStore = create((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      // Fetch odds
-      const { games: rawGames, remaining: oddsRemaining } = await fetchAllOdds(requestsRemaining);
-      const processed = processGames(rawGames);
+      // Fetch odds and team stats in parallel
+      const [oddsResult, teamStats] = await Promise.all([
+        fetchAllOdds(requestsRemaining),
+        fetchAllTeamStats().catch((err) => {
+          console.warn('[Team stats failed]', err.message);
+          return {};
+        }),
+      ]);
+
+      const { games: rawGames, remaining: oddsRemaining } = oddsResult;
+      const processed = processGames(rawGames, teamStats);
 
       const rawOdds = {};
       for (const game of rawGames) {
@@ -65,6 +75,7 @@ const useStore = create((set, get) => ({
       set({
         games: processed,
         rawOdds,
+        teamStats,
         lastFetched: new Date().toISOString(),
         requestsRemaining: lastRemaining,
         isLoading: false,
