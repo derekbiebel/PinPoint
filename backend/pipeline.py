@@ -70,7 +70,7 @@ async def run(include_odds: bool = False) -> dict:
         nfl_state = sleeper.get_nfl_state()
         if nfl_state:
             sources_fetched.append("sleeper_state")
-            season = nfl_state.get("season", season)
+            season = int(nfl_state.get("season", season))
     except Exception as e:
         errors.append(f"sleeper_state: {e}")
         logger.error(f"Sleeper state fetch failed: {e}")
@@ -78,13 +78,21 @@ async def run(include_odds: bool = False) -> dict:
     current_week = nfl_state.get("week", 1) if nfl_state else 1
 
     # ---- Step 2: Fetch play-by-play data ----
+    # In offseason, use last completed season's data since current season has none
     pbp = None
     team_epa = []
+    pbp_seasons = [season]
+    if offseason:
+        pbp_seasons = [season - 1]
+        logger.info(f"Offseason — using {season - 1} PBP data for ratings")
+
     try:
-        pbp = nfl_stats.fetch_pbp([season])
+        pbp = nfl_stats.fetch_pbp(pbp_seasons)
         if pbp is not None and not pbp.empty:
             sources_fetched.append("nfl_pbp")
-            team_epa = nfl_stats.compute_team_epa(pbp, current_week)
+            # In offseason, use a high week number so all games are included
+            epa_week = current_week if not offseason else 22
+            team_epa = nfl_stats.compute_team_epa(pbp, epa_week)
     except Exception as e:
         errors.append(f"nfl_pbp: {e}")
         logger.error(f"PBP fetch failed: {e}")
