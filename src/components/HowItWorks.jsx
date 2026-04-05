@@ -138,27 +138,53 @@ export default function HowItWorks() {
       </Section>
 
       {/* NFL Power Rankings */}
-      <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-sm px-5 py-5">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-indigo-600 dark:text-indigo-400 text-lg">&#127944;</span>
-          <h2 className="text-sm font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wider">
-            NFL Power Rankings
-          </h2>
-        </div>
-        <p className="text-sm text-indigo-800 dark:text-indigo-300 mb-3">
-          The NFL Rankings tab runs a much deeper model via a Python backend. Check it out for:
+      <Section number={8} title="NFL Power Rankings (Python Backend)">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          The NFL Rankings tab runs a deeper model powered by a Python backend with real NFL analytics data.
+          It has two refresh modes: free (team stats only) and paid (adds FanDuel odds for edge detection).
         </p>
-        <div className="space-y-2">
-          <NextItem text="Play-by-play EPA (Expected Points Added) ratings, weighted toward recent games." />
-          <NextItem text="Injury adjustments using snap-weighted EPA contributions for missing players." />
-          <NextItem text="Positional matchup analysis — OL vs DL pass rush, CB vs WR coverage, run game." />
-          <NextItem text="Weather adjustments for outdoor stadiums — wind, temperature, and precipitation." />
-          <NextItem text="Offseason futures model with roster construction, draft capital, coaching changes, and Monte Carlo season simulation." />
-        </div>
-        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-3">
-          Requires the Python backend to be running. See the NFL Rankings tab for setup instructions.
-        </p>
-      </div>
+        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Data Sources (all free)</h4>
+        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3 list-disc list-inside">
+          <li><strong>nfl_data_py</strong> — every NFL play tagged with EPA (Expected Points Added), the gold standard for measuring offense/defense quality</li>
+          <li><strong>ESPN</strong> — injury reports, full rosters for all 32 teams</li>
+          <li><strong>Sleeper</strong> — target shares, air yards, snap percentages per player</li>
+          <li><strong>OpenWeatherMap</strong> — game-day wind, temperature, precipitation for outdoor stadiums</li>
+        </ul>
+        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Team Power Ratings</h4>
+        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3 list-disc list-inside">
+          <li>Offensive and defensive EPA per play, weighted by recency (last 4 weeks = 40%, weeks 5-10 = 35%, earlier = 25%)</li>
+          <li>Scaled to points: EPA x 2.5 x plays per game = composite rating</li>
+          <li>Adjustments: home field (+2.5 pts), rest differential, short week (-1.5 pts), divisional games (15% compression)</li>
+          <li>Injury impact: snap-weighted EPA contribution of missing players subtracted from team rating</li>
+        </ul>
+        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Player Rankings</h4>
+        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3 list-disc list-inside">
+          <li><strong>QBs</strong> ranked by EPA — plus passing yards, TDs, INTs, completions, rushing</li>
+          <li><strong>WRs</strong> ranked by receiving yards — plus targets, receptions, TDs, target share, air yards</li>
+          <li><strong>RBs</strong> ranked by rushing yards — plus carries, TDs, receptions, receiving yards</li>
+          <li><strong>TEs</strong> ranked by receiving yards — plus targets, receptions, TDs, target share</li>
+        </ul>
+        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Matchup Analysis</h4>
+        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3 list-disc list-inside">
+          <li>OL vs DL — pass rush win rate matchups</li>
+          <li>CB vs WR — coverage EPA against target share of opposing receivers</li>
+          <li>Run game — rushing EPA vs run stop rate</li>
+        </ul>
+        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Offseason Futures Model</h4>
+        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3 list-disc list-inside">
+          <li>Roster construction score: QB career EPA, WR air yards, OL sack rate, returning starter snap %</li>
+          <li>Draft capital: 1st round QB = +1.5 rating, 1st round skill = +0.8, 1st round OL = +0.5</li>
+          <li>New coaching staff: regress offensive EPA 30% toward league mean (new HC/OC), defensive 20% (new DC)</li>
+          <li>Monte Carlo simulation: 10,000 seasons to project win totals, compared against FanDuel lines</li>
+        </ul>
+        <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Weather Adjustments</h4>
+        <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 list-disc list-inside">
+          <li>Wind over 15mph: -3.0 points on total</li>
+          <li>Temperature below 32°F: -1.5 points</li>
+          <li>Precipitation: -1.0 points</li>
+          <li>Dome/retractable roof stadiums are weather-exempt</li>
+        </ul>
+      </Section>
     </div>
   );
 }

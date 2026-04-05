@@ -25,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 from backend.db import store
-from backend.pipeline import run as run_pipeline
+from backend.pipeline import run as run_pipeline, get_player_rankings
 from backend.data.fanduel_odds import get_requests_remaining
 
 # ---------- Logging ----------
@@ -194,6 +194,19 @@ async def get_matchups(
         return {"count": len(matchups), "matchups": matchups}
     except Exception as e:
         logger.error(f"Error fetching matchups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/players")
+async def get_players(position: str | None = Query(None, description="Filter by position: QB, WR, RB, TE")):
+    """Get player rankings by position group."""
+    try:
+        rankings = get_player_rankings()
+        if position:
+            pos = position.upper()
+            return {"position": pos, "count": len(rankings.get(pos, [])), "players": rankings.get(pos, [])}
+        return {"positions": list(rankings.keys()), "players": rankings}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

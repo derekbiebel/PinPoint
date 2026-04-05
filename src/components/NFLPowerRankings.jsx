@@ -4,6 +4,7 @@ import {
   fetchGames,
   fetchFutures,
   fetchMatchups,
+  fetchPlayers,
   fetchStatus,
 } from '../lib/nflApi';
 
@@ -547,11 +548,162 @@ function FuturesView() {
 }
 
 // ---------------------------------------------------------------------------
+// Sub-view: Player Rankings
+// ---------------------------------------------------------------------------
+
+const POS_TABS = ['QB', 'WR', 'RB', 'TE'];
+
+const PLAYER_COLUMNS = {
+  QB: [
+    { key: 'rank', label: '#', w: 'w-8' },
+    { key: 'player_name', label: 'Player', w: 'flex-1 min-w-0' },
+    { key: 'team', label: 'Team', w: 'w-14' },
+    { key: 'epa', label: 'EPA', w: 'w-16' },
+    { key: 'pass_yds', label: 'Pass Yds', w: 'w-18' },
+    { key: 'pass_td', label: 'TD', w: 'w-12' },
+    { key: 'int', label: 'INT', w: 'w-12' },
+    { key: 'completions', label: 'Cmp', w: 'w-12' },
+    { key: 'attempts', label: 'Att', w: 'w-12' },
+    { key: 'rush_yds', label: 'Rush', w: 'w-14' },
+  ],
+  WR: [
+    { key: 'rank', label: '#', w: 'w-8' },
+    { key: 'player_name', label: 'Player', w: 'flex-1 min-w-0' },
+    { key: 'team', label: 'Team', w: 'w-14' },
+    { key: 'rec_yds', label: 'Rec Yds', w: 'w-18' },
+    { key: 'receptions', label: 'Rec', w: 'w-12' },
+    { key: 'targets', label: 'Tgt', w: 'w-12' },
+    { key: 'rec_td', label: 'TD', w: 'w-12' },
+    { key: 'epa', label: 'EPA', w: 'w-16' },
+    { key: 'target_share', label: 'Tgt%', w: 'w-14' },
+    { key: 'air_yds', label: 'Air Yds', w: 'w-16' },
+  ],
+  RB: [
+    { key: 'rank', label: '#', w: 'w-8' },
+    { key: 'player_name', label: 'Player', w: 'flex-1 min-w-0' },
+    { key: 'team', label: 'Team', w: 'w-14' },
+    { key: 'rush_yds', label: 'Rush Yds', w: 'w-18' },
+    { key: 'carries', label: 'Car', w: 'w-12' },
+    { key: 'rush_td', label: 'Rush TD', w: 'w-16' },
+    { key: 'epa', label: 'EPA', w: 'w-16' },
+    { key: 'receptions', label: 'Rec', w: 'w-12' },
+    { key: 'rec_yds', label: 'Rec Yds', w: 'w-16' },
+    { key: 'rec_td', label: 'Rec TD', w: 'w-14' },
+  ],
+  TE: [
+    { key: 'rank', label: '#', w: 'w-8' },
+    { key: 'player_name', label: 'Player', w: 'flex-1 min-w-0' },
+    { key: 'team', label: 'Team', w: 'w-14' },
+    { key: 'rec_yds', label: 'Rec Yds', w: 'w-18' },
+    { key: 'receptions', label: 'Rec', w: 'w-12' },
+    { key: 'targets', label: 'Tgt', w: 'w-12' },
+    { key: 'rec_td', label: 'TD', w: 'w-12' },
+    { key: 'epa', label: 'EPA', w: 'w-16' },
+    { key: 'target_share', label: 'Tgt%', w: 'w-14' },
+  ],
+};
+
+function PlayersView() {
+  const [pos, setPos] = useState('QB');
+  const fetcher = useCallback(() => fetchPlayers(pos), [pos]);
+  const { data: players, loading, error, offline, reload } = useNflData(fetcher);
+
+  if (offline) return <BackendOffline onCheck={reload} />;
+
+  const columns = PLAYER_COLUMNS[pos];
+
+  return (
+    <div className="space-y-4">
+      {/* Position tabs */}
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+        {POS_TABS.map((p) => (
+          <button
+            key={p}
+            onClick={() => setPos(p)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              pos === p
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {loading && <Spinner />}
+      {error && <ErrorBanner message={error} onRetry={reload} />}
+
+      {!loading && !error && (!players || players.length === 0) && (
+        <p className="text-center text-gray-500 dark:text-gray-400 py-12 text-sm">
+          No player data yet. Hit "Refresh Ratings" to load.
+        </p>
+      )}
+
+      {!loading && players && players.length > 0 && (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="flex gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800">
+            {columns.map((col) => (
+              <span
+                key={col.key}
+                className={`text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider ${col.w} ${col.key === 'player_name' ? 'text-left' : 'text-right'}`}
+              >
+                {col.label}
+              </span>
+            ))}
+          </div>
+
+          {/* Rows */}
+          <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+            {players.map((player, i) => (
+              <div
+                key={`${player.player_name}-${i}`}
+                className="flex gap-2 px-4 py-2 items-center hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+              >
+                {columns.map((col) => {
+                  const val = player[col.key];
+                  const isName = col.key === 'player_name';
+                  const isRank = col.key === 'rank';
+                  const isEpa = col.key === 'epa';
+                  const display = val == null ? '—'
+                    : col.key === 'target_share' ? `${(val * 100).toFixed(1)}%`
+                    : typeof val === 'number' && !Number.isInteger(val) ? val.toFixed(1)
+                    : val;
+
+                  return (
+                    <span
+                      key={col.key}
+                      className={`text-sm ${col.w} ${
+                        isName
+                          ? 'font-medium text-gray-900 dark:text-white truncate text-left'
+                          : isRank
+                            ? 'font-bold text-gray-400 dark:text-gray-500 text-right'
+                            : isEpa
+                              ? `font-semibold text-right ${val > 0 ? 'text-green-600 dark:text-green-400' : val < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`
+                              : 'text-gray-600 dark:text-gray-400 tabular-nums text-right'
+                      }`}
+                    >
+                      {display}
+                    </span>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 const SUB_TABS = [
   { key: 'rankings', label: 'Rankings' },
+  { key: 'players', label: 'Players' },
   { key: 'thisweek', label: 'This Week' },
   { key: 'matchups', label: 'Matchups' },
   { key: 'futures', label: 'Futures' },
@@ -628,6 +780,7 @@ export default function NFLPowerRankings() {
 
       {/* Active sub-view */}
       {activeTab === 'rankings' && <RankingsView />}
+      {activeTab === 'players' && <PlayersView />}
       {activeTab === 'thisweek' && <ThisWeekView />}
       {activeTab === 'matchups' && <MatchupsView />}
       {activeTab === 'futures' && <FuturesView />}

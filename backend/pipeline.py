@@ -9,10 +9,16 @@ import logging
 from datetime import datetime
 
 from backend.data import nfl_stats, espn_scraper, sleeper, weather, fanduel_odds
-from backend.model import power_ratings, matchups as matchup_model, futures as futures_model, edge
+from backend.model import power_ratings, matchups as matchup_model, futures as futures_model, edge, player_rankings
 from backend.db import store
 
 logger = logging.getLogger(__name__)
+
+# In-memory cache for player rankings (refreshed each pipeline run)
+_player_rankings_cache: dict[str, list[dict]] = {}
+
+def get_player_rankings() -> dict[str, list[dict]]:
+    return _player_rankings_cache
 
 
 def _current_nfl_season() -> int:
@@ -119,6 +125,21 @@ async def run(include_odds: bool = False) -> dict:
     except Exception as e:
         errors.append(f"espn_rosters: {e}")
         logger.error(f"ESPN rosters fetch failed: {e}")
+
+    # ---- Step 4b: Fetch seasonal stats and compute player rankings ----
+    player_ranks = {}
+    try:
+        seasonal = nfl_stats.fetch_seasonal_stats(pbp_seasons)
+        if seasonal is not None and not seasonal.empty:
+            sources_fetched.append("seasonal_stats")
+            player_ranks = player_rankings.compute_player_rankings(seasonal)
+            if player_ranks:
+                global _player_rankings_cache
+                _player_rankings_cache = player_ranks
+                sources_fetched.append("player_rankings")
+    except Exception as e:
+        errors.append(f"player_rankings: {e}")
+        logger.error(f"Player rankings failed: {e}")
 
     # ---- Step 5: Compute power ratings ----
     ratings = []

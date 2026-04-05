@@ -28,6 +28,15 @@ export async function fetchMatchups() {
   return data.matchups || [];
 }
 
+export async function fetchPlayers(position = null) {
+  const url = position ? `${NFL_API}/players?position=${position}` : `${NFL_API}/players`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch players');
+  const data = await res.json();
+  if (position) return data.players || [];
+  return data.players || {};
+}
+
 export async function fetchStatus() {
   const res = await fetch(`${NFL_API}/status`);
   if (!res.ok) throw new Error('Failed to fetch status');
