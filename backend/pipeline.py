@@ -84,20 +84,26 @@ async def run(include_odds: bool = False) -> dict:
     current_week = nfl_state.get("week", 1) if nfl_state else 1
 
     # ---- Step 2: Fetch seasonal stats (lightweight, works on free hosting) ----
+    # nfl_data_py data lags — try season-1, then season-2 as fallback
     pbp = None  # PBP is too large for free-tier hosting, use seasonal instead
     team_epa = []
-    data_seasons = [season] if not offseason else [season - 1]
-    logger.info(f"Fetching seasonal stats for {data_seasons}")
-
     seasonal = None
-    try:
-        seasonal = nfl_stats.fetch_seasonal_stats(data_seasons)
-        if seasonal is not None and not seasonal.empty:
-            sources_fetched.append("seasonal_stats")
-            team_epa = nfl_stats.compute_team_epa_from_seasonal(seasonal)
-    except Exception as e:
-        errors.append(f"seasonal_stats: {e}")
-        logger.error(f"Seasonal stats fetch failed: {e}")
+
+    for try_season in ([season, season - 1] if not offseason else [season - 1, season - 2]):
+        try:
+            logger.info(f"Trying seasonal stats for {try_season}")
+            seasonal = nfl_stats.fetch_seasonal_stats([try_season])
+            if seasonal is not None and not seasonal.empty:
+                sources_fetched.append(f"seasonal_stats_{try_season}")
+                team_epa = nfl_stats.compute_team_epa_from_seasonal(seasonal)
+                logger.info(f"Got seasonal data for {try_season}: {len(seasonal)} rows, {len(team_epa)} teams")
+                break
+        except Exception as e:
+            logger.warning(f"Seasonal stats {try_season} failed: {e}")
+            continue
+
+    if not team_epa:
+        errors.append("seasonal_stats: no data found for any recent season")
 
     # ---- Step 3: Fetch injuries ----
     injuries = []
