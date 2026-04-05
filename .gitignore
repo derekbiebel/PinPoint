@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 
 .env
+backend/venv/
+backend/db/pinpoint.db
+__pycache__/
+*.pyc

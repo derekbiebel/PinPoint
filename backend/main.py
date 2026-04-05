@@ -72,14 +72,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS for local React dev server
+# CORS — read allowed origins from env var (comma-separated), fall back to localhost
+_default_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+]
+_env_origins = os.environ.get("ALLOWED_ORIGINS", "")
+allowed_origins = [o.strip() for o in _env_origins.split(",") if o.strip()] if _env_origins else _default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

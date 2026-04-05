@@ -1,4 +1,4 @@
-const NFL_API = 'http://localhost:8000/api';
+const NFL_API = import.meta.env.VITE_NFL_API_URL || 'http://localhost:8000/api';
 
 export async function fetchTeamRatings() {
   const res = await fetch(`${NFL_API}/teams`);

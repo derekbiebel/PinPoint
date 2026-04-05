@@ -141,7 +141,8 @@ function useNflData(fetcher) {
       const result = await fetcher();
       setData(result);
     } catch (err) {
-      if (err instanceof TypeError && err.message.includes('fetch')) {
+      // Network errors (CORS, connection refused, etc.) indicate backend is offline
+      if (err instanceof TypeError || err.message?.includes('fetch') || err.message?.includes('NetworkError') || err.message?.includes('Failed to fetch')) {
         setOffline(true);
       } else {
         setError(err.message);
