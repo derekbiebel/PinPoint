@@ -38,7 +38,7 @@ function ApiKeyScreen({ onSave }) {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 max-w-md w-full shadow-sm">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-          Value Finder
+          PinPoint
         </h2>
         <p className="text-gray-600 dark:text-gray-400 text-sm mb-6 text-center">
           Enter your Odds API key to get started.
@@ -126,7 +126,7 @@ export default function Dashboard() {
       {/* Top bar */}
       <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Value Finder</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white">PinPoint</h1>
           <div className="flex items-center gap-2">
             <LastRefreshed />
             <button
