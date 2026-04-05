@@ -32,12 +32,12 @@ export default function GameCard({ game }) {
     edgesByMarket[edge.market].push(edge);
   }
 
-  // For each market, show only the best edge per outcome
+  // For each market, show only the best edge per outcome (keyed by name only)
   const bestEdgesByMarket = {};
   for (const [market, edges] of Object.entries(edgesByMarket)) {
     const byOutcome = {};
     for (const e of edges) {
-      const key = e.market === 'h2h' ? e.outcomeName : `${e.outcomeName}|${e.point}`;
+      const key = e.outcomeName;
       if (!byOutcome[key] || e.edgePct > byOutcome[key].edgePct) {
         byOutcome[key] = e;
       }

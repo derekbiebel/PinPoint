@@ -3,6 +3,8 @@
  * All pure functions, no side effects.
  */
 
+const MIN_BOOKS_FOR_CONSENSUS = 3;
+
 export function impliedProb(americanOdds) {
   if (americanOdds > 0) return 100 / (americanOdds + 100);
   return Math.abs(americanOdds) / (Math.abs(americanOdds) + 100);
@@ -15,37 +17,64 @@ export function vigFreeProbs(odds1, odds2) {
   return { prob1: p1 / total, prob2: p2 / total };
 }
 
+/**
+ * Build consensus across books for a given market.
+ *
+ * For spreads/totals, different books may offer different points
+ * (e.g. -3.5 vs -4). We key consensus by outcome name only (team or
+ * Over/Under), not by point, because the vig-free probability already
+ * accounts for the point difference. This lets us detect value when a
+ * book's line disagrees with the market.
+ *
+ * Also tracks the most common point (consensus line) and how many
+ * books contributed, so we can require a minimum book threshold.
+ */
 export function buildConsensus(bookmakers, marketKey) {
   const outcomeTotals = {};
   const outcomeCounts = {};
+  const outcomePoints = {}; // track point frequencies for consensus line
 
   for (const book of bookmakers) {
     const market = book.markets.find((m) => m.key === marketKey);
     if (!market) continue;
 
     const outcomes = market.outcomes;
-    if (marketKey === 'h2h' && outcomes.length === 2) {
-      const { prob1, prob2 } = vigFreeProbs(outcomes[0].price, outcomes[1].price);
-      const key0 = outcomes[0].name;
-      const key1 = outcomes[1].name;
-      outcomeTotals[key0] = (outcomeTotals[key0] || 0) + prob1;
-      outcomeCounts[key0] = (outcomeCounts[key0] || 0) + 1;
-      outcomeTotals[key1] = (outcomeTotals[key1] || 0) + prob2;
-      outcomeCounts[key1] = (outcomeCounts[key1] || 0) + 1;
-    } else if ((marketKey === 'spreads' || marketKey === 'totals') && outcomes.length === 2) {
-      const { prob1, prob2 } = vigFreeProbs(outcomes[0].price, outcomes[1].price);
-      const key0 = `${outcomes[0].name}|${outcomes[0].point}`;
-      const key1 = `${outcomes[1].name}|${outcomes[1].point}`;
-      outcomeTotals[key0] = (outcomeTotals[key0] || 0) + prob1;
-      outcomeCounts[key0] = (outcomeCounts[key0] || 0) + 1;
-      outcomeTotals[key1] = (outcomeTotals[key1] || 0) + prob2;
-      outcomeCounts[key1] = (outcomeCounts[key1] || 0) + 1;
-    }
+    if (outcomes.length !== 2) continue;
+
+    const { prob1, prob2 } = vigFreeProbs(outcomes[0].price, outcomes[1].price);
+    const probs = [prob1, prob2];
+
+    outcomes.forEach((outcome, i) => {
+      // Key by name only — NOT by point
+      const key = outcome.name;
+      outcomeTotals[key] = (outcomeTotals[key] || 0) + probs[i];
+      outcomeCounts[key] = (outcomeCounts[key] || 0) + 1;
+
+      // Track points for spreads/totals
+      if (outcome.point !== undefined) {
+        if (!outcomePoints[key]) outcomePoints[key] = {};
+        outcomePoints[key][outcome.point] = (outcomePoints[key][outcome.point] || 0) + 1;
+      }
+    });
   }
 
   const consensus = {};
   for (const key of Object.keys(outcomeTotals)) {
-    consensus[key] = outcomeTotals[key] / outcomeCounts[key];
+    const count = outcomeCounts[key];
+    // Require minimum books for a reliable consensus
+    if (count < MIN_BOOKS_FOR_CONSENSUS) continue;
+
+    const consensusPoint = outcomePoints[key]
+      ? parseFloat(
+          Object.entries(outcomePoints[key]).sort((a, b) => b[1] - a[1])[0][0]
+        )
+      : undefined;
+
+    consensus[key] = {
+      prob: outcomeTotals[key] / count,
+      count,
+      consensusPoint,
+    };
   }
   return consensus;
 }
@@ -68,13 +97,27 @@ export function calculateEdges(game) {
       const bookProbs = [prob1, prob2];
 
       outcomes.forEach((outcome, i) => {
-        const outcomeKey =
-          marketKey === 'h2h' ? outcome.name : `${outcome.name}|${outcome.point}`;
-        const consensusProb = consensus[outcomeKey];
-        if (consensusProb == null) return;
+        const key = outcome.name;
+        const con = consensus[key];
+        if (!con) return;
 
-        const edge = consensusProb - bookProbs[i];
+        const edge = con.prob - bookProbs[i];
         const edgePct = edge * 100;
+
+        // For spreads/totals, flag if this book offers a better number
+        let betterNumber = false;
+        if (outcome.point !== undefined && con.consensusPoint !== undefined) {
+          if (marketKey === 'spreads') {
+            // Lower spread = better for the bettor (e.g. -3.5 better than -4)
+            betterNumber = outcome.point > con.consensusPoint;
+          } else if (marketKey === 'totals') {
+            // For over: lower point = better. For under: higher point = better.
+            betterNumber =
+              outcome.name === 'Over'
+                ? outcome.point < con.consensusPoint
+                : outcome.point > con.consensusPoint;
+          }
+        }
 
         edgeResults.push({
           market: marketKey,
@@ -82,12 +125,15 @@ export function calculateEdges(game) {
           bookTitle: book.title,
           outcomeName: outcome.name,
           point: outcome.point,
+          consensusPoint: con.consensusPoint,
           price: outcome.price,
           impliedProb: bookProbs[i],
-          consensusProb,
+          consensusProb: con.prob,
+          consensusBooks: con.count,
           edge,
           edgePct,
           edgeLevel: edgePct >= 5 ? 'high' : edgePct >= 3 ? 'moderate' : 'none',
+          betterNumber,
         });
       });
     }

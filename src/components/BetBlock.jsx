@@ -42,6 +42,11 @@ export default function BetBlock({ edge, movement }) {
         <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
           {label}
         </span>
+        {edge.betterNumber && (
+          <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400" title={`Consensus line: ${edge.consensusPoint}`}>
+            KEY#
+          </span>
+        )}
         <MovementIndicator movement={movement} />
       </div>
       <div className="flex items-center gap-2 shrink-0">
