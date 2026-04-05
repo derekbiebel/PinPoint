@@ -1,5 +1,4 @@
 import BetBlock from './BetBlock';
-import SharpMoneyBar from './SharpMoneyBar';
 
 const SPORT_BADGES = {
   americanfootball_nfl: { label: 'NFL', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' },
@@ -88,11 +87,6 @@ export default function GameCard({ game }) {
             </div>
           );
         })}
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 pb-3">
-        <SharpMoneyBar />
       </div>
     </div>
   );
