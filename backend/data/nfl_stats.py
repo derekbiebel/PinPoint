@@ -81,12 +81,33 @@ def fetch_rosters(seasons: list[int]) -> pd.DataFrame | None:
     if nfl is None:
         return None
     try:
-        rosters = nfl.import_rosters(seasons)
+        rosters = nfl.import_seasonal_rosters(seasons)
         logger.info(f"Fetched rosters: {len(rosters)} rows")
         return rosters
     except Exception as e:
         logger.error(f"Failed to fetch rosters: {e}")
         return None
+
+
+def enrich_seasonal_with_rosters(seasonal: pd.DataFrame, seasons: list[int]) -> pd.DataFrame:
+    """
+    Merge seasonal stats with roster data to add team, position, and player_name.
+    Seasonal stats only have player_id — rosters have the rest.
+    """
+    rosters = fetch_rosters(seasons)
+    if rosters is None or rosters.empty:
+        logger.warning("No roster data to enrich seasonal stats")
+        return seasonal
+
+    roster_cols = rosters[["player_id", "team", "position", "player_name"]].drop_duplicates(subset=["player_id"])
+    merged = seasonal.merge(roster_cols, on="player_id", how="left")
+
+    # Rename team to recent_team for compatibility
+    if "team" in merged.columns:
+        merged = merged.rename(columns={"team": "recent_team"})
+
+    logger.info(f"Enriched seasonal stats: {len(merged)} rows, {merged['recent_team'].nunique()} teams")
+    return merged
 
 
 def fetch_injuries(seasons: list[int]) -> pd.DataFrame | None:

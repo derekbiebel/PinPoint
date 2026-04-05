@@ -94,6 +94,8 @@ async def run(include_odds: bool = False) -> dict:
             logger.info(f"Trying seasonal stats for {try_season}")
             seasonal = nfl_stats.fetch_seasonal_stats([try_season])
             if seasonal is not None and not seasonal.empty:
+                # Enrich with roster data (adds team, position, player_name)
+                seasonal = nfl_stats.enrich_seasonal_with_rosters(seasonal, [try_season])
                 sources_fetched.append(f"seasonal_stats_{try_season}")
                 team_epa = nfl_stats.compute_team_epa_from_seasonal(seasonal)
                 logger.info(f"Got seasonal data for {try_season}: {len(seasonal)} rows, {len(team_epa)} teams")
