@@ -137,23 +137,27 @@ export default function HowItWorks() {
         </div>
       </Section>
 
-      {/* What's Next */}
+      {/* NFL Power Rankings */}
       <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl shadow-sm px-5 py-5">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-indigo-600 dark:text-indigo-400 text-lg">&#9889;</span>
+          <span className="text-indigo-600 dark:text-indigo-400 text-lg">&#127944;</span>
           <h2 className="text-sm font-bold text-indigo-900 dark:text-indigo-200 uppercase tracking-wider">
-            What's Next
+            NFL Power Rankings
           </h2>
         </div>
         <p className="text-sm text-indigo-800 dark:text-indigo-300 mb-3">
-          An NFL Power Rankings model is in the works. It will be a major upgrade over the current approach:
+          The NFL Rankings tab runs a much deeper model via a Python backend. Check it out for:
         </p>
         <div className="space-y-2">
-          <NextItem text="Play-by-play EPA (Expected Points Added) data for much deeper team evaluation." />
-          <NextItem text="Injury adjustments that account for missing starters and key rotation players." />
-          <NextItem text="Positional matchup analysis (e.g., elite pass rush vs. weak offensive line)." />
-          <NextItem text="Weather data for outdoor games -- wind, rain, and temperature all affect scoring." />
+          <NextItem text="Play-by-play EPA (Expected Points Added) ratings, weighted toward recent games." />
+          <NextItem text="Injury adjustments using snap-weighted EPA contributions for missing players." />
+          <NextItem text="Positional matchup analysis — OL vs DL pass rush, CB vs WR coverage, run game." />
+          <NextItem text="Weather adjustments for outdoor stadiums — wind, temperature, and precipitation." />
+          <NextItem text="Offseason futures model with roster construction, draft capital, coaching changes, and Monte Carlo season simulation." />
         </div>
+        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-3">
+          Requires the Python backend to be running. See the NFL Rankings tab for setup instructions.
+        </p>
       </div>
     </div>
   );
