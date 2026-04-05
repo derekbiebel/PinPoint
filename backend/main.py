@@ -85,13 +85,14 @@ app.add_middleware(
 # ---------- Endpoints ----------
 
 @app.post("/api/refresh")
-async def refresh():
+async def refresh(include_odds: bool = Query(False, description="Include FanDuel odds (costs API credits)")):
     """
-    Trigger the full data pipeline.
-    Fetches data, computes ratings, computes edges, stores everything.
+    Trigger the data pipeline.
+    By default only fetches free data (ESPN, nfl_data_py, Sleeper).
+    Pass ?include_odds=true to also pull FanDuel lines.
     """
     try:
-        summary = await run_pipeline()
+        summary = await run_pipeline(include_odds=include_odds)
         return {"ok": True, "summary": summary}
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")

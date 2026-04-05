@@ -559,9 +559,56 @@ const SUB_TABS = [
 
 export default function NFLPowerRankings() {
   const [activeTab, setActiveTab] = useState('rankings');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState(null);
+
+  const handleRefresh = async (includeOdds) => {
+    setRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const { triggerRefresh } = await import('../lib/nflApi');
+      const result = await triggerRefresh(includeOdds);
+      setRefreshResult(result.summary || result);
+      // Reload the page after a short delay so sub-views re-fetch
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      setRefreshResult({ status: 'error', error: err.message });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
+      {/* Refresh controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => handleRefresh(false)}
+          disabled={refreshing}
+          className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {refreshing ? 'Running pipeline...' : 'Refresh Ratings (free)'}
+        </button>
+        <button
+          onClick={() => handleRefresh(true)}
+          disabled={refreshing}
+          title="Also pulls FanDuel lines — costs Odds API credits"
+          className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+          + FanDuel Odds (costs credits)
+        </button>
+        {refreshResult && (
+          <span className={`text-xs ${refreshResult.status === 'error' ? 'text-red-500' : 'text-green-600 dark:text-green-400'}`}>
+            {refreshResult.status === 'error'
+              ? refreshResult.error
+              : `Done — ${refreshResult.teams_rated || 0} teams rated, ${refreshResult.sources_fetched?.length || 0} sources`}
+          </span>
+        )}
+      </div>
+
       {/* Sub-tab bar */}
       <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
         {SUB_TABS.map((tab) => (

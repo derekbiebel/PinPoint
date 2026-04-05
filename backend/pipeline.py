@@ -37,7 +37,7 @@ def _is_offseason() -> bool:
     return False
 
 
-async def run() -> dict:
+async def run(include_odds: bool = False) -> dict:
     """
     Main pipeline execution.
 
@@ -124,25 +124,28 @@ async def run() -> dict:
         errors.append(f"power_ratings: {e}")
         logger.error(f"Power ratings computation failed: {e}")
 
-    # ---- Step 6: Fetch FanDuel odds ----
+    # ---- Step 6: Fetch FanDuel odds (only if requested) ----
     fd_games = []
     fd_futures_data = []
-    try:
-        fd_games = fanduel_odds.fetch_nfl_odds()
-        if fd_games:
-            sources_fetched.append("fanduel_odds")
-    except Exception as e:
-        errors.append(f"fanduel_odds: {e}")
-        logger.error(f"FanDuel odds fetch failed: {e}")
-
-    if offseason:
+    if include_odds:
         try:
-            fd_futures_data = fanduel_odds.fetch_nfl_futures()
-            if fd_futures_data:
-                sources_fetched.append("fanduel_futures")
+            fd_games = fanduel_odds.fetch_nfl_odds()
+            if fd_games:
+                sources_fetched.append("fanduel_odds")
         except Exception as e:
-            errors.append(f"fanduel_futures: {e}")
-            logger.error(f"FanDuel futures fetch failed: {e}")
+            errors.append(f"fanduel_odds: {e}")
+            logger.error(f"FanDuel odds fetch failed: {e}")
+
+        if offseason:
+            try:
+                fd_futures_data = fanduel_odds.fetch_nfl_futures()
+                if fd_futures_data:
+                    sources_fetched.append("fanduel_futures")
+            except Exception as e:
+                errors.append(f"fanduel_futures: {e}")
+                logger.error(f"FanDuel futures fetch failed: {e}")
+    else:
+        logger.info("Skipping FanDuel odds (include_odds=False)")
 
     # ---- Step 7: Build ratings lookup for game predictions ----
     ratings_map = {r["team"]: r for r in ratings}

@@ -34,8 +34,9 @@ export async function fetchStatus() {
   return res.json();
 }
 
-export async function triggerRefresh() {
-  const res = await fetch(`${NFL_API}/refresh`, { method: 'POST' });
+export async function triggerRefresh(includeOdds = false) {
+  const url = includeOdds ? `${NFL_API}/refresh?include_odds=true` : `${NFL_API}/refresh`;
+  const res = await fetch(url, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to trigger refresh');
   return res.json();
 }
