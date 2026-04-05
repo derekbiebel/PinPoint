@@ -10,6 +10,7 @@ const useStore = create((set, get) => ({
   lastFetched: null,
   selectedSport: 'all',
   isLoading: false,
+  isLoadingTeams: false,
   error: null,
   requestsRemaining: null,
   requestsUsed: null,
@@ -17,6 +18,26 @@ const useStore = create((set, get) => ({
   teamStats: {},
 
   setSelectedSport: (key) => set({ selectedSport: key }),
+
+  // Free — just loads ESPN data, no API cost
+  loadTeamStats: async () => {
+    set({ isLoadingTeams: true });
+    try {
+      const teamStats = await fetchAllTeamStats();
+      set({ teamStats, isLoadingTeams: false });
+
+      // If we already have games loaded, reprocess them with fresh team data
+      const { rawOdds } = get();
+      const allRaw = Object.values(rawOdds).flat();
+      if (allRaw.length > 0) {
+        const processed = processGames(allRaw, teamStats);
+        set({ games: processed });
+      }
+    } catch (err) {
+      console.warn('[Team stats failed]', err.message);
+      set({ isLoadingTeams: false });
+    }
+  },
 
   checkBudget: async () => {
     try {
@@ -27,8 +48,9 @@ const useStore = create((set, get) => ({
     }
   },
 
-  fetchGames: async () => {
-    const { requestsRemaining } = get();
+  // Costs API credits — only called by explicit button press
+  fetchOdds: async () => {
+    const { requestsRemaining, teamStats } = get();
 
     if (requestsRemaining !== null && !canAffordRefresh(requestsRemaining)) {
       set({
@@ -39,17 +61,18 @@ const useStore = create((set, get) => ({
 
     set({ isLoading: true, error: null });
     try {
-      // Fetch odds and team stats in parallel
-      const [oddsResult, teamStats] = await Promise.all([
+      // Fetch odds (and fresh team stats in parallel if we don't have them)
+      const hasTeams = Object.keys(teamStats).length > 0;
+      const [oddsResult, freshTeamStats] = await Promise.all([
         fetchAllOdds(requestsRemaining),
-        fetchAllTeamStats().catch((err) => {
-          console.warn('[Team stats failed]', err.message);
-          return {};
-        }),
+        hasTeams
+          ? Promise.resolve(teamStats)
+          : fetchAllTeamStats().catch(() => ({})),
       ]);
 
+      const finalTeamStats = hasTeams ? teamStats : freshTeamStats;
       const { games: rawGames, remaining: oddsRemaining } = oddsResult;
-      const processed = processGames(rawGames, teamStats);
+      const processed = processGames(rawGames, finalTeamStats);
 
       const rawOdds = {};
       for (const game of rawGames) {
@@ -75,7 +98,7 @@ const useStore = create((set, get) => ({
       set({
         games: processed,
         rawOdds,
-        teamStats,
+        teamStats: finalTeamStats,
         lastFetched: new Date().toISOString(),
         requestsRemaining: lastRemaining,
         isLoading: false,
@@ -83,10 +106,6 @@ const useStore = create((set, get) => ({
     } catch (err) {
       set({ error: err.message, isLoading: false });
     }
-  },
-
-  refresh: async () => {
-    await get().fetchGames();
   },
 }));
 

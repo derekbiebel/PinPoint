@@ -80,7 +80,9 @@ export default function Dashboard() {
   const error = useStore((s) => s.error);
   const requestsRemaining = useStore((s) => s.requestsRemaining);
   const bets = useStore((s) => s.bets);
-  const fetchGames = useStore((s) => s.fetchGames);
+  const fetchOdds = useStore((s) => s.fetchOdds);
+  const loadTeamStats = useStore((s) => s.loadTeamStats);
+  const isLoadingTeams = useStore((s) => s.isLoadingTeams);
   const checkBudgetFn = useStore((s) => s.checkBudget);
 
   const affordable = canAffordRefresh(requestsRemaining);
@@ -93,16 +95,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!hasKey) return;
-    // On first load, do a cheap budget check, then fetch if we can afford it
-    if (games.length === 0) {
-      checkBudgetFn().then(() => {
-        // Re-read remaining after check — use getState for latest
-        const remaining = useStore.getState().requestsRemaining;
-        if (canAffordRefresh(remaining)) {
-          fetchGames();
-        }
-      });
-    }
+    // On page load: fetch free ESPN data + check API budget. Never auto-pull odds.
+    loadTeamStats();
+    checkBudgetFn();
   }, [hasKey]);
 
   const filtered =
@@ -194,7 +189,7 @@ export default function Dashboard() {
           <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-700 dark:text-red-300">
             {error}
             <button
-              onClick={fetchGames}
+              onClick={fetchOdds}
               className="ml-3 underline hover:no-underline"
             >
               Retry
