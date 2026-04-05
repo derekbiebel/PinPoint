@@ -116,7 +116,8 @@ export default function TrendingTeams({ teamStats }) {
   if (Object.keys(teamStats).length === 0) {
     return (
       <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-        <p className="text-sm">Team data loads when you refresh odds.</p>
+        <div className="animate-spin inline-block w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mb-2" />
+        <p className="text-sm">Loading team data from ESPN...</p>
       </div>
     );
   }
