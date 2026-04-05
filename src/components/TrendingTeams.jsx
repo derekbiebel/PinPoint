@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { getATSRecords } from '../lib/betTracker';
+import useStore from '../store/useStore';
 
 const SPORT_LABELS = {
   americanfootball_nfl: 'NFL',
@@ -20,6 +22,8 @@ const VIEWS = [
   { key: 'hot', label: 'Hottest Streaks' },
   { key: 'home', label: 'Best at Home' },
   { key: 'away', label: 'Best on Road' },
+  { key: 'bestATS', label: 'Best ATS' },
+  { key: 'worstATS', label: 'Worst ATS' },
 ];
 
 function parseRecord(record) {
@@ -76,16 +80,31 @@ function StreakPill({ streak }) {
 export default function TrendingTeams({ teamStats }) {
   const [sport, setSport] = useState('all');
   const [view, setView] = useState('overall');
+  const bets = useStore((s) => s.bets);
+
+  const atsRecords = useMemo(() => getATSRecords(bets), [bets]);
 
   const teams = useMemo(() => {
     let list = Object.values(teamStats);
     if (sport !== 'all') {
       list = list.filter((t) => t.sportKey === sport);
     }
-    return list;
-  }, [teamStats, sport]);
+    // Attach ATS data
+    return list.map((t) => ({ ...t, ats: atsRecords[t.name] || null }));
+  }, [teamStats, sport, atsRecords]);
+
+  const isATS = view === 'bestATS' || view === 'worstATS';
+  const atsTeams = isATS ? teams.filter((t) => t.ats && t.ats.total >= 1) : [];
+  const hasATSData = atsTeams.length > 0;
 
   const sorted = useMemo(() => {
+    if (view === 'bestATS') {
+      return [...atsTeams].sort((a, b) => b.ats.coverPct - a.ats.coverPct);
+    }
+    if (view === 'worstATS') {
+      return [...atsTeams].sort((a, b) => a.ats.coverPct - b.ats.coverPct);
+    }
+
     const copy = [...teams];
 
     if (view === 'overall') {
@@ -111,7 +130,7 @@ export default function TrendingTeams({ teamStats }) {
     }
 
     return copy;
-  }, [teams, view]);
+  }, [teams, atsTeams, view]);
 
   if (Object.keys(teamStats).length === 0) {
     return (
@@ -158,7 +177,81 @@ export default function TrendingTeams({ teamStats }) {
         ))}
       </div>
 
-      {/* Leaderboard */}
+      {/* ATS empty state */}
+      {isATS && !hasATSData && (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm px-4 py-8 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No ATS data yet. Pull odds and let spread bets resolve to build ATS records.
+          </p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            PinPoint tracks every spread bet it places and builds team cover rates over time.
+          </p>
+        </div>
+      )}
+
+      {/* ATS Leaderboard */}
+      {isATS && hasATSData && (
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+            <div className="col-span-1">#</div>
+            <div className="col-span-4">Team</div>
+            <div className="col-span-2 text-center">ATS Record</div>
+            <div className="col-span-2 text-center">Cover%</div>
+            <div className="col-span-1 text-center">Pushes</div>
+            <div className="col-span-2 text-center">Overall</div>
+          </div>
+          <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+            {sorted.map((team, i) => (
+              <div
+                key={team.name}
+                className="grid grid-cols-12 gap-2 px-4 py-2.5 items-center hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+              >
+                <div className="col-span-1">
+                  <RankBadge rank={i + 1} />
+                </div>
+                <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  {team.logo && (
+                    <img src={team.logo} alt="" className="w-6 h-6 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate block">
+                      {team.name}
+                    </span>
+                    {sport === 'all' && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                        {SPORT_LABELS[team.sportKey]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="col-span-2 text-center text-sm text-gray-600 dark:text-gray-400">
+                  {team.ats.covers}-{team.ats.fails}{team.ats.pushes > 0 ? `-${team.ats.pushes}` : ''}
+                </div>
+                <div className="col-span-2 text-center">
+                  <span className={`text-sm font-semibold ${
+                    team.ats.coverPct >= 0.600
+                      ? 'text-green-600 dark:text-green-400'
+                      : team.ats.coverPct < 0.400
+                        ? 'text-red-500 dark:text-red-400'
+                        : 'text-gray-600 dark:text-gray-400'
+                  }`}>
+                    {(team.ats.coverPct * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="col-span-1 text-center text-sm text-gray-500 dark:text-gray-400">
+                  {team.ats.pushes}
+                </div>
+                <div className="col-span-2 text-center text-sm text-gray-600 dark:text-gray-400">
+                  {team.wins}-{team.losses}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Standard Leaderboard */}
+      {!isATS && (
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
         {/* Header row */}
         <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-800 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
@@ -250,6 +343,7 @@ export default function TrendingTeams({ teamStats }) {
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }

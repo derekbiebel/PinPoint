@@ -167,4 +167,31 @@ export function clearAllBets() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+// Build ATS (against the spread) records per team from resolved spread bets
+export function getATSRecords(bets) {
+  const records = {};
+
+  const spreadBets = bets.filter(
+    (b) => b.market === 'spreads' && (b.status === 'won' || b.status === 'lost' || b.status === 'push')
+  );
+
+  for (const bet of spreadBets) {
+    const team = bet.outcomeName;
+    if (!records[team]) records[team] = { covers: 0, fails: 0, pushes: 0, total: 0, sportKey: bet.sportKey };
+
+    records[team].total++;
+    if (bet.status === 'won') records[team].covers++;
+    else if (bet.status === 'lost') records[team].fails++;
+    else records[team].pushes++;
+  }
+
+  // Calculate cover percentage
+  for (const rec of Object.values(records)) {
+    const decided = rec.covers + rec.fails;
+    rec.coverPct = decided > 0 ? rec.covers / decided : 0;
+  }
+
+  return records;
+}
+
 export { STAKE };
