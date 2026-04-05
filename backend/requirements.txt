@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+nfl_data_py
+requests
+beautifulsoup4
+python-dotenv
+apscheduler
+aiosqlite

@@ -1,0 +1,588 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+  fetchTeamRatings,
+  fetchGames,
+  fetchFutures,
+  fetchMatchups,
+  fetchStatus,
+} from '../lib/nflApi';
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+function espnLogo(abbrev) {
+  return `https://a.espncdn.com/i/teamlogos/nfl/500/${abbrev.toLowerCase()}.png`;
+}
+
+function tierColor(rank) {
+  if (rank <= 8) return 'text-green-600 dark:text-green-400';
+  if (rank >= 25) return 'text-red-500 dark:text-red-400';
+  return 'text-gray-700 dark:text-gray-300';
+}
+
+function tierBg(rank) {
+  if (rank <= 8) return 'bg-green-50 dark:bg-green-900/20';
+  if (rank >= 25) return 'bg-red-50 dark:bg-red-900/20';
+  return '';
+}
+
+function edgeBadge(tier) {
+  if (tier === 'strong') return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+  if (tier === 'lean') return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+  return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+}
+
+function Spinner() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <div className="animate-spin w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full" />
+    </div>
+  );
+}
+
+function ErrorBanner({ message, onRetry }) {
+  return (
+    <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-700 dark:text-red-300">
+      {message}
+      {onRetry && (
+        <button onClick={onRetry} className="ml-3 underline hover:no-underline">
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Backend-not-running screen
+// ---------------------------------------------------------------------------
+
+function BackendOffline({ onCheck }) {
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    setResult(null);
+    try {
+      await fetchStatus();
+      setResult('connected');
+    } catch {
+      setResult('failed');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 max-w-lg mx-auto shadow-sm text-center space-y-5">
+      <div className="text-4xl">🏈</div>
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+        NFL Power Rankings requires the Python backend
+      </h3>
+      <ol className="text-left text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal list-inside">
+        <li>Install Python 3.10+</li>
+        <li>
+          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-xs font-mono">
+            cd pinpoint/backend
+          </code>
+        </li>
+        <li>
+          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-xs font-mono">
+            pip install -r requirements.txt
+          </code>
+        </li>
+        <li>
+          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-xs font-mono">
+            python main.py
+          </code>
+        </li>
+        <li>Come back and refresh</li>
+      </ol>
+
+      <button
+        onClick={() => { handleCheck(); onCheck?.(); }}
+        disabled={checking}
+        className="px-5 py-2 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
+      >
+        {checking ? 'Checking...' : 'Check Connection'}
+      </button>
+
+      {result === 'connected' && (
+        <p className="text-green-600 dark:text-green-400 text-sm font-medium">
+          Backend is running! Refresh the page to load data.
+        </p>
+      )}
+      {result === 'failed' && (
+        <p className="text-red-500 dark:text-red-400 text-sm">
+          Could not reach backend at localhost:8000. Make sure it is running.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hook: generic data fetcher with backend-offline detection
+// ---------------------------------------------------------------------------
+
+function useNflData(fetcher) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [offline, setOffline] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setOffline(false);
+    try {
+      const result = await fetcher();
+      setData(result);
+    } catch (err) {
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        setOffline(true);
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [fetcher]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { data, loading, error, offline, reload: load };
+}
+
+// ---------------------------------------------------------------------------
+// Sub-view: Rankings
+// ---------------------------------------------------------------------------
+
+function RankingsView() {
+  const { data: teams, loading, error, offline, reload } = useNflData(fetchTeamRatings);
+
+  if (offline) return <BackendOffline onCheck={reload} />;
+  if (loading) return <Spinner />;
+  if (error) return <ErrorBanner message={error} onRetry={reload} />;
+  if (!teams || teams.length === 0) {
+    return (
+      <p className="text-center text-gray-500 dark:text-gray-400 py-12 text-sm">
+        No team ratings available yet.
+      </p>
+    );
+  }
+
+  const sorted = [...teams].sort((a, b) => b.composite - a.composite);
+
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="grid grid-cols-[3rem_2.5rem_1fr_4.5rem_4.5rem_5rem_3rem] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+        <span>#</span>
+        <span />
+        <span>Team</span>
+        <span className="text-right">OFF</span>
+        <span className="text-right">DEF</span>
+        <span className="text-right">Rating</span>
+        <span className="text-center">Trend</span>
+      </div>
+
+      {sorted.map((team, idx) => {
+        const rank = idx + 1;
+        const trend = team.trend ?? 0;
+        return (
+          <div
+            key={team.abbrev}
+            className={`grid grid-cols-[3rem_2.5rem_1fr_4.5rem_4.5rem_5rem_3rem] gap-2 px-4 py-2.5 items-center border-b border-gray-50 dark:border-gray-800/50 ${tierBg(rank)} hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors`}
+          >
+            <span className={`text-sm font-bold ${tierColor(rank)}`}>{rank}</span>
+            <img
+              src={espnLogo(team.abbrev)}
+              alt={team.abbrev}
+              className="w-7 h-7 object-contain"
+              loading="lazy"
+            />
+            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+              {team.name}
+            </span>
+            <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
+              {team.offense?.toFixed(1) ?? '—'}
+            </span>
+            <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
+              {team.defense?.toFixed(1) ?? '—'}
+            </span>
+            <span className={`text-sm font-bold text-right tabular-nums ${tierColor(rank)}`}>
+              {team.composite?.toFixed(1) ?? '—'}
+            </span>
+            <span className="text-center text-sm">
+              {trend > 0 && <span className="text-green-500">&#9650;</span>}
+              {trend < 0 && <span className="text-red-500">&#9660;</span>}
+              {trend === 0 && <span className="text-gray-400">&#8212;</span>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-view: This Week
+// ---------------------------------------------------------------------------
+
+function ThisWeekView() {
+  const { data: games, loading, error, offline, reload } = useNflData(fetchGames);
+
+  if (offline) return <BackendOffline onCheck={reload} />;
+  if (loading) return <Spinner />;
+  if (error) return <ErrorBanner message={error} onRetry={reload} />;
+  if (!games || games.length === 0) {
+    return (
+      <p className="text-center text-gray-500 dark:text-gray-400 py-12 text-sm">
+        No upcoming games found. Check back closer to game day.
+      </p>
+    );
+  }
+
+  const tierOrder = { strong: 0, lean: 1, none: 2 };
+  const sorted = [...games].sort(
+    (a, b) => (tierOrder[a.edge_tier] ?? 2) - (tierOrder[b.edge_tier] ?? 2)
+  );
+
+  return (
+    <div className="space-y-4">
+      {sorted.map((game) => (
+        <div
+          key={game.id ?? `${game.away_team}-${game.home_team}`}
+          className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden"
+        >
+          {/* Game header */}
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={espnLogo(game.away_abbrev)} alt={game.away_abbrev} className="w-7 h-7 object-contain" loading="lazy" />
+              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                {game.away_team} @ {game.home_team}
+              </span>
+              <img src={espnLogo(game.home_abbrev)} alt={game.home_abbrev} className="w-7 h-7 object-contain" loading="lazy" />
+            </div>
+            <div className="flex items-center gap-2">
+              {game.edge_tier && game.edge_tier !== 'none' && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${edgeBadge(game.edge_tier)}`}>
+                  {game.edge_tier === 'strong' ? 'Strong Edge' : 'Lean'}
+                </span>
+              )}
+              {game.kickoff && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {new Date(game.kickoff).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Spread + Total comparison */}
+          <div className="px-4 py-3 grid grid-cols-2 gap-4">
+            {/* Spread */}
+            <div>
+              <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Spread</div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">Model</span>
+                  <span className="font-medium text-gray-900 dark:text-white tabular-nums">
+                    {game.model_spread != null ? (game.model_spread > 0 ? '+' : '') + game.model_spread.toFixed(1) : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">FanDuel</span>
+                  <span className="font-medium text-gray-900 dark:text-white tabular-nums">
+                    {game.fd_spread != null ? (game.fd_spread > 0 ? '+' : '') + game.fd_spread.toFixed(1) : '—'}
+                  </span>
+                </div>
+                {game.spread_edge != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Edge</span>
+                    <span className={`font-bold tabular-nums ${Math.abs(game.spread_edge) >= 3 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                      {game.spread_edge > 0 ? '+' : ''}{game.spread_edge.toFixed(1)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Total */}
+            <div>
+              <div className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Total</div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">Model</span>
+                  <span className="font-medium text-gray-900 dark:text-white tabular-nums">
+                    {game.model_total?.toFixed(1) ?? '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">FanDuel</span>
+                  <span className="font-medium text-gray-900 dark:text-white tabular-nums">
+                    {game.fd_total?.toFixed(1) ?? '—'}
+                  </span>
+                </div>
+                {game.total_edge != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Edge</span>
+                    <span className={`font-bold tabular-nums ${Math.abs(game.total_edge) >= 2 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                      {game.total_edge > 0 ? '+' : ''}{game.total_edge.toFixed(1)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Weather + Injuries */}
+          {(game.weather || game.injury_summary) && (
+            <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+              {game.weather && (
+                <div className="flex items-center gap-1.5">
+                  <span>&#9729;</span>
+                  <span>{game.weather.temp}°F, Wind {game.weather.wind_mph} mph{game.weather.precip ? `, ${game.weather.precip}` : ''}</span>
+                </div>
+              )}
+              {game.injury_summary && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-red-400">&#9888;</span>
+                  <span>{game.injury_summary}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-view: Matchups
+// ---------------------------------------------------------------------------
+
+function MatchupsView() {
+  const { data: matchups, loading, error, offline, reload } = useNflData(fetchMatchups);
+
+  if (offline) return <BackendOffline onCheck={reload} />;
+  if (loading) return <Spinner />;
+  if (error) return <ErrorBanner message={error} onRetry={reload} />;
+  if (!matchups || matchups.length === 0) {
+    return (
+      <p className="text-center text-gray-500 dark:text-gray-400 py-12 text-sm">
+        No matchup data available yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {matchups.map((game) => (
+        <div
+          key={game.id ?? `${game.away_team}-${game.home_team}`}
+          className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden"
+        >
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
+            <img src={espnLogo(game.away_abbrev)} alt={game.away_abbrev} className="w-7 h-7 object-contain" loading="lazy" />
+            <span className="text-sm font-bold text-gray-900 dark:text-white">
+              {game.away_team} @ {game.home_team}
+            </span>
+            <img src={espnLogo(game.home_abbrev)} alt={game.home_abbrev} className="w-7 h-7 object-contain" loading="lazy" />
+          </div>
+
+          <div className="px-4 py-3 space-y-3">
+            {(game.positional_matchups ?? []).map((m) => (
+              <div key={m.label}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    {m.label}
+                  </span>
+                  <span className={`text-xs font-bold ${m.advantage_team === game.away_team ? 'text-blue-600 dark:text-blue-400' : m.advantage_team === game.home_team ? 'text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {m.advantage_team ?? 'Even'}
+                  </span>
+                </div>
+                {/* Advantage bar */}
+                <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex">
+                  <div
+                    className="h-full bg-blue-500 dark:bg-blue-400 rounded-l-full"
+                    style={{ width: `${m.away_pct ?? 50}%` }}
+                  />
+                  <div
+                    className="h-full bg-purple-500 dark:bg-purple-400 rounded-r-full"
+                    style={{ width: `${m.home_pct ?? 50}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  <span>{game.away_abbrev} {m.away_pct ?? 50}%</span>
+                  <span>{game.home_abbrev} {m.home_pct ?? 50}%</span>
+                </div>
+              </div>
+            ))}
+
+            {(!game.positional_matchups || game.positional_matchups.length === 0) && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                No positional matchup data available for this game.
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-view: Futures
+// ---------------------------------------------------------------------------
+
+function FuturesView() {
+  const { data: futures, loading, error, offline, reload } = useNflData(fetchFutures);
+  const [sortKey, setSortKey] = useState('gap');
+  const [sortDir, setSortDir] = useState('desc');
+
+  if (offline) return <BackendOffline onCheck={reload} />;
+  if (loading) return <Spinner />;
+  if (error) return <ErrorBanner message={error} onRetry={reload} />;
+  if (!futures || futures.length === 0) {
+    return (
+      <p className="text-center text-gray-500 dark:text-gray-400 py-12 text-sm">
+        No futures data available yet. This view is most useful during the offseason.
+      </p>
+    );
+  }
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
+
+  const sorted = [...futures].sort((a, b) => {
+    const aVal = a[sortKey] ?? 0;
+    const bVal = b[sortKey] ?? 0;
+    return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+  });
+
+  const SortHeader = ({ label, field, align = 'text-right' }) => (
+    <button
+      onClick={() => handleSort(field)}
+      className={`text-xs font-semibold uppercase tracking-wider hover:text-gray-600 dark:hover:text-gray-300 transition-colors ${align} ${sortKey === field ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500'}`}
+    >
+      {label}
+      {sortKey === field && (
+        <span className="ml-0.5">{sortDir === 'asc' ? '▲' : '▼'}</span>
+      )}
+    </button>
+  );
+
+  return (
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="grid grid-cols-[2.5rem_1fr_5rem_5rem_4rem_5rem_5rem] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800">
+        <span />
+        <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Team</span>
+        <SortHeader label="Proj W" field="projected_wins" />
+        <SortHeader label="FD Line" field="fd_win_total" />
+        <SortHeader label="Gap" field="gap" />
+        <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-right">Direction</span>
+        <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider text-right">Edge</span>
+      </div>
+
+      {sorted.map((team) => {
+        const gap = team.gap ?? 0;
+        const direction = gap > 0 ? 'Over' : gap < 0 ? 'Under' : '—';
+        const dirColor = gap > 0
+          ? 'text-green-600 dark:text-green-400'
+          : gap < 0
+          ? 'text-red-500 dark:text-red-400'
+          : 'text-gray-500 dark:text-gray-400';
+
+        return (
+          <div
+            key={team.abbrev}
+            className="grid grid-cols-[2.5rem_1fr_5rem_5rem_4rem_5rem_5rem] gap-2 px-4 py-2.5 items-center border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+          >
+            <img
+              src={espnLogo(team.abbrev)}
+              alt={team.abbrev}
+              className="w-7 h-7 object-contain"
+              loading="lazy"
+            />
+            <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+              {team.name}
+            </span>
+            <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
+              {team.projected_wins?.toFixed(1) ?? '—'}
+            </span>
+            <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
+              {team.fd_win_total?.toFixed(1) ?? '—'}
+            </span>
+            <span className={`text-sm font-bold text-right tabular-nums ${Math.abs(gap) >= 1.5 ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
+              {gap > 0 ? '+' : ''}{gap.toFixed(1)}
+            </span>
+            <span className={`text-sm font-medium text-right ${dirColor}`}>
+              {direction}
+            </span>
+            <span className="text-right">
+              {team.edge_tier && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${edgeBadge(team.edge_tier)}`}>
+                  {team.edge_tier}
+                </span>
+              )}
+              {!team.edge_tier && <span className="text-xs text-gray-400">—</span>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+const SUB_TABS = [
+  { key: 'rankings', label: 'Rankings' },
+  { key: 'thisweek', label: 'This Week' },
+  { key: 'matchups', label: 'Matchups' },
+  { key: 'futures', label: 'Futures' },
+];
+
+export default function NFLPowerRankings() {
+  const [activeTab, setActiveTab] = useState('rankings');
+
+  return (
+    <div className="space-y-5">
+      {/* Sub-tab bar */}
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+        {SUB_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Active sub-view */}
+      {activeTab === 'rankings' && <RankingsView />}
+      {activeTab === 'thisweek' && <ThisWeekView />}
+      {activeTab === 'matchups' && <MatchupsView />}
+      {activeTab === 'futures' && <FuturesView />}
+    </div>
+  );
+}

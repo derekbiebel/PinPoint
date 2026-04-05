@@ -8,6 +8,8 @@ import BetTracker from './BetTracker';
 import Settings from './Settings';
 import ModelInsights from './ModelInsights';
 import TrendingTeams from './TrendingTeams';
+import NFLPowerRankings from './NFLPowerRankings';
+import HowItWorks from './HowItWorks';
 
 function MetricCard({ label, value, sub }) {
   return (
@@ -147,6 +149,8 @@ export default function Dashboard() {
           {[
             { key: 'games', label: 'Games' },
             { key: 'trending', label: 'Trending' },
+            { key: 'nfl', label: 'NFL Rankings' },
+            { key: 'howItWorks', label: 'How It Works' },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -163,6 +167,10 @@ export default function Dashboard() {
         </div>
 
         {activeTab === 'trending' && <TrendingTeams teamStats={teamStats} />}
+
+        {activeTab === 'howItWorks' && <HowItWorks />}
+
+        {activeTab === 'nfl' && <NFLPowerRankings />}
 
         {activeTab === 'games' && <>
         {/* Sport filter */}
