@@ -16,6 +16,20 @@ function espnLogo(abbrev) {
   return `https://a.espncdn.com/i/teamlogos/nfl/500/${abbrev.toLowerCase()}.png`;
 }
 
+const TEAM_NAMES = {
+  ARI: 'Arizona Cardinals', ATL: 'Atlanta Falcons', BAL: 'Baltimore Ravens',
+  BUF: 'Buffalo Bills', CAR: 'Carolina Panthers', CHI: 'Chicago Bears',
+  CIN: 'Cincinnati Bengals', CLE: 'Cleveland Browns', DAL: 'Dallas Cowboys',
+  DEN: 'Denver Broncos', DET: 'Detroit Lions', GB: 'Green Bay Packers',
+  HOU: 'Houston Texans', IND: 'Indianapolis Colts', JAX: 'Jacksonville Jaguars',
+  KC: 'Kansas City Chiefs', LAC: 'LA Chargers', LAR: 'LA Rams',
+  LV: 'Las Vegas Raiders', MIA: 'Miami Dolphins', MIN: 'Minnesota Vikings',
+  NE: 'New England Patriots', NO: 'New Orleans Saints', NYG: 'New York Giants',
+  NYJ: 'New York Jets', PHI: 'Philadelphia Eagles', PIT: 'Pittsburgh Steelers',
+  SEA: 'Seattle Seahawks', SF: 'San Francisco 49ers', TB: 'Tampa Bay Buccaneers',
+  TEN: 'Tennessee Titans', WAS: 'Washington Commanders',
+};
+
 function tierColor(rank) {
   if (rank <= 8) return 'text-green-600 dark:text-green-400';
   if (rank >= 25) return 'text-red-500 dark:text-red-400';
@@ -176,7 +190,17 @@ function RankingsView() {
     );
   }
 
-  const sorted = [...teams].sort((a, b) => b.composite - a.composite);
+  // Normalize API fields to what the UI expects
+  const normalized = teams.map((t) => ({
+    abbrev: t.abbrev || t.team,
+    name: t.name || TEAM_NAMES[t.team] || t.team,
+    offense: t.offense ?? t.off_epa ?? 0,
+    defense: t.defense ?? t.def_epa ?? 0,
+    composite: t.composite ?? t.composite_rating ?? 0,
+    trend: t.trend ?? 0,
+  }));
+
+  const sorted = [...normalized].sort((a, b) => b.composite - a.composite);
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
@@ -210,10 +234,10 @@ function RankingsView() {
               {team.name}
             </span>
             <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
-              {team.offense?.toFixed(1) ?? '—'}
+              {team.offense?.toFixed(2) ?? '—'}
             </span>
             <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
-              {team.defense?.toFixed(1) ?? '—'}
+              {team.defense?.toFixed(2) ?? '—'}
             </span>
             <span className={`text-sm font-bold text-right tabular-nums ${tierColor(rank)}`}>
               {team.composite?.toFixed(1) ?? '—'}
@@ -713,6 +737,7 @@ export default function NFLPowerRankings() {
   const [activeTab, setActiveTab] = useState('rankings');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleRefresh = async (includeOdds) => {
     setRefreshing(true);
@@ -721,8 +746,8 @@ export default function NFLPowerRankings() {
       const { triggerRefresh } = await import('../lib/nflApi');
       const result = await triggerRefresh(includeOdds);
       setRefreshResult(result.summary || result);
-      // Reload the page after a short delay so sub-views re-fetch
-      setTimeout(() => window.location.reload(), 1500);
+      // Bump key to force sub-views to re-fetch without leaving the tab
+      setRefreshKey((k) => k + 1);
     } catch (err) {
       setRefreshResult({ status: 'error', error: err.message });
     } finally {
@@ -779,11 +804,11 @@ export default function NFLPowerRankings() {
       </div>
 
       {/* Active sub-view */}
-      {activeTab === 'rankings' && <RankingsView />}
-      {activeTab === 'players' && <PlayersView />}
-      {activeTab === 'thisweek' && <ThisWeekView />}
-      {activeTab === 'matchups' && <MatchupsView />}
-      {activeTab === 'futures' && <FuturesView />}
+      {activeTab === 'rankings' && <RankingsView key={refreshKey} />}
+      {activeTab === 'players' && <PlayersView key={refreshKey} />}
+      {activeTab === 'thisweek' && <ThisWeekView key={refreshKey} />}
+      {activeTab === 'matchups' && <MatchupsView key={refreshKey} />}
+      {activeTab === 'futures' && <FuturesView key={refreshKey} />}
     </div>
   );
 }
