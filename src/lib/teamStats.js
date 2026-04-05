@@ -7,7 +7,8 @@
  * team on the road.
  */
 
-const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
+const ESPN_STANDINGS_BASE = 'https://site.api.espn.com/apis/v2/sports';
+const ESPN_SCORES_BASE = 'https://site.api.espn.com/apis/site/v2/sports';
 
 const SPORT_PATHS = {
   americanfootball_nfl: 'football/nfl',
@@ -21,7 +22,7 @@ async function fetchStandings(sportKey) {
   const path = SPORT_PATHS[sportKey];
   if (!path) return {};
 
-  const url = `${ESPN_BASE}/${path}/standings`;
+  const url = `${ESPN_STANDINGS_BASE}/${path}/standings`;
   const res = await fetch(url);
   if (!res.ok) return {};
 
@@ -34,8 +35,10 @@ async function fetchStandings(sportKey) {
       if (!team) continue;
 
       const statsMap = {};
+      const statsValues = {};
       for (const s of child.stats || []) {
-        statsMap[s.name] = s.displayValue || s.value;
+        statsMap[s.name] = s.displayValue ?? s.value;
+        statsValues[s.name] = s.value;
       }
 
       teams[team.displayName] = {
@@ -44,14 +47,12 @@ async function fetchStandings(sportKey) {
         logo: team.logos?.[0]?.href,
         wins: parseInt(statsMap.wins) || 0,
         losses: parseInt(statsMap.losses) || 0,
-        winPct: parseFloat(statsMap.winPercent || statsMap.winPct) || 0,
+        winPct: parseFloat(statsValues.winPercent ?? statsMap.winPercent ?? 0) || 0,
         streak: statsMap.streak || '',
-        // Home/away records where available
         homeRecord: statsMap.Home || statsMap.home || null,
         awayRecord: statsMap.Road || statsMap.road || statsMap.away || null,
-        // Recent form
-        last10: statsMap.Last_Ten || statsMap['Last Ten'] || null,
-        divRecord: statsMap.vsDiv || statsMap.Division || null,
+        last10: statsMap['Last Ten Games'] || statsMap.Last_Ten || statsMap['Last Ten'] || null,
+        divRecord: statsMap['vs. Div.'] || statsMap.vsDiv || statsMap.Division || null,
       };
     }
   }
@@ -64,7 +65,7 @@ async function fetchRecentScores(sportKey) {
   const path = SPORT_PATHS[sportKey];
   if (!path) return [];
 
-  const url = `${ESPN_BASE}/${path}/scoreboard`;
+  const url = `${ESPN_SCORES_BASE}/${path}/scoreboard`;
   const res = await fetch(url);
   if (!res.ok) return [];
 
