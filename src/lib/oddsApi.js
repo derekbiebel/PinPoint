@@ -2,7 +2,7 @@ const BASE = 'https://api.the-odds-api.com/v4';
 const API_KEY_STORAGE = 'pinpoint_api_key';
 
 export function getApiKey() {
-  return localStorage.getItem(API_KEY_STORAGE) || import.meta.env.VITE_ODDS_API_KEY || '';
+  return localStorage.getItem(API_KEY_STORAGE) || '';
 }
 
 export function setApiKey(key) {
