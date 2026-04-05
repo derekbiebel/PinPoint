@@ -72,19 +72,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — read allowed origins from env var (comma-separated), fall back to localhost
-_default_origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-]
-_env_origins = os.environ.get("ALLOWED_ORIGINS", "")
-allowed_origins = [o.strip() for o in _env_origins.split(",") if o.strip()] if _env_origins else _default_origins
-
+# CORS — allow all origins for simplicity (this is a personal tool, not a public API)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
