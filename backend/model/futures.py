@@ -282,7 +282,10 @@ def compute_futures(
                 rating *= (1 - NEW_DC_REGRESSION * 0.5)  # defense is half the equation
 
         # Apply draft capital if available
-        base_wins = 8.5 + (rating / 10.0)  # rough conversion to win baseline
+        # Convert composite rating to win baseline
+        # Ratings range roughly -100 to +120. Map to ~3-14 wins.
+        # 8.5 is league average, scale by a factor that keeps wins realistic
+        base_wins = 8.5 + (rating / 40.0)  # ~+3 wins for top team, ~-2.5 for worst
         if draft_picks and team in draft_picks:
             base_wins = apply_draft_capital(base_wins, draft_picks[team])
 
