@@ -139,12 +139,11 @@ def compute_power_ratings(
 
     for team in team_epa:
         off_pts = _epa_to_points(team["off_epa"])
-        def_pts = _epa_to_points(team["def_epa"])
         inj_adj = _injury_adjustment(injuries, team["team"], rosters)
 
-        # Composite: offense contribution minus defense contribution
-        # Higher = better team. Good offense = high off_pts, good defense = low (negative) def_pts
-        composite = off_pts - def_pts + inj_adj
+        # Composite based on offensive EPA only — we don't have reliable
+        # defensive player stats from nfl_data_py seasonal data
+        composite = off_pts + inj_adj
         team["composite_rating"] = round(composite, 2)
 
     # Sort by composite rating descending

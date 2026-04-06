@@ -152,8 +152,8 @@ export default function HowItWorks() {
         </ul>
         <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">Team Power Ratings</h4>
         <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1 mb-3 list-disc list-inside">
-          <li>Offensive and defensive EPA per play, weighted by recency (last 4 weeks = 40%, weeks 5-10 = 35%, earlier = 25%)</li>
-          <li>Scaled to points: EPA x 2.5 x plays per game = composite rating</li>
+          <li>Offensive EPA per play, scaled to points: EPA x 2.5 x plays per game = composite rating</li>
+          <li>Defensive ratings not included — nfl_data_py seasonal data only covers offensive production</li>
           <li>Adjustments: home field (+2.5 pts), rest differential, short week (-1.5 pts), divisional games (15% compression)</li>
           <li>Injury impact: snap-weighted EPA contribution of missing players subtracted from team rating</li>
         </ul>

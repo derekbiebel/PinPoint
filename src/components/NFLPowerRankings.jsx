@@ -195,7 +195,6 @@ function RankingsView() {
     abbrev: t.abbrev || t.team,
     name: t.name || TEAM_NAMES[t.team] || t.team,
     offense: t.offense ?? t.off_epa ?? 0,
-    defense: t.defense ?? t.def_epa ?? 0,
     composite: t.composite ?? t.composite_rating ?? 0,
     trend: t.trend ?? 0,
   }));
@@ -205,12 +204,11 @@ function RankingsView() {
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="grid grid-cols-[3rem_2.5rem_1fr_4.5rem_4.5rem_5rem_3rem] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+      <div className="grid grid-cols-[3rem_2.5rem_1fr_5rem_5.5rem_3rem] gap-2 px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
         <span>#</span>
         <span />
         <span>Team</span>
-        <span className="text-right">OFF</span>
-        <span className="text-right">DEF</span>
+        <span className="text-right">OFF EPA</span>
         <span className="text-right">Rating</span>
         <span className="text-center">Trend</span>
       </div>
@@ -221,7 +219,7 @@ function RankingsView() {
         return (
           <div
             key={team.abbrev}
-            className={`grid grid-cols-[3rem_2.5rem_1fr_4.5rem_4.5rem_5rem_3rem] gap-2 px-4 py-2.5 items-center border-b border-gray-50 dark:border-gray-800/50 ${tierBg(rank)} hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors`}
+            className={`grid grid-cols-[3rem_2.5rem_1fr_5rem_5.5rem_3rem] gap-2 px-4 py-2.5 items-center border-b border-gray-50 dark:border-gray-800/50 ${tierBg(rank)} hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors`}
           >
             <span className={`text-sm font-bold ${tierColor(rank)}`}>{rank}</span>
             <img
@@ -234,10 +232,7 @@ function RankingsView() {
               {team.name}
             </span>
             <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
-              {team.offense?.toFixed(2) ?? '—'}
-            </span>
-            <span className="text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">
-              {team.defense?.toFixed(2) ?? '—'}
+              {team.offense?.toFixed(3) ?? '—'}
             </span>
             <span className={`text-sm font-bold text-right tabular-nums ${tierColor(rank)}`}>
               {team.composite?.toFixed(1) ?? '—'}
